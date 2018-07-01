@@ -145,8 +145,9 @@ protected:
     unsigned ValueDependent : 1;
     unsigned InstantiationDependent : 1;
     unsigned ContainsUnexpandedParameterPack : 1;
+    unsigned IsEmpty : 1;
   };
-  enum { NumExprBits = 17 };
+  enum { NumExprBits = 18 };
 
   class CharacterLiteralBitfields {
     friend class CharacterLiteral;

@@ -1260,6 +1260,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     break;
   case Builtin::BI__builtin_return_empty:
+    TheCall->setEmpty(true);
     if (SemaBuiltinCallReturnEmpty(*this, TheCall))
       return ExprError();
     break;

@@ -839,7 +839,9 @@ CXXConstructExpr::CXXConstructExpr(const ASTContext &C, StmtClass SC,
         ExprBits.InstantiationDependent = true;
       if (Args[i]->containsUnexpandedParameterPack())
         ExprBits.ContainsUnexpandedParameterPack = true;
-  
+      if (Args[i]->isEmpty())
+        ExprBits.IsEmpty = true;
+
       this->Args[i] = Args[i];
     }
   }

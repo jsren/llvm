@@ -4065,7 +4065,9 @@ public:
              Temporary->isTypeDependent(), Temporary->isValueDependent(),
              Temporary->isInstantiationDependent(),
              Temporary->containsUnexpandedParameterPack()),
-        State(Temporary) {}
+        State(Temporary) {
+    setEmpty(Temporary && Temporary->isEmpty());
+  }
 
   MaterializeTemporaryExpr(EmptyShell Empty)
       : Expr(MaterializeTemporaryExprClass, Empty) {}

@@ -2,4 +2,70 @@ clang::driver::Command::Execute
 Sema::CppLookupName
 SemaLookup.cpp:939 CppNamespaceLookup
 
-lldb-6.0 /home/jsren/build-llvm/bin/clang-7 -- -cc1 -triple x86_64-unknown-linux-gnu -emit-obj -mrelax-all -disable-free -main-file-name ast_test1.cpp -mrelocation-model static -mthread-model posix -mdisable-fp-elim -fmath-errno -masm-verbose -mconstructor-aliases -munwind-tables -fuse-init-array -target-cpu x86-64 -dwarf-column-info -debugger-tuning=gdb -coverage-notes-file /home/jsren/ast_test1.gcno -resource-dir /home/jsren/build-llvm/lib/clang/7.0.0 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0/backward -internal-isystem /usr/local/include -internal-isystem /home/jsren/build-llvm/lib/clang/7.0.0/include -internal-externc-isystem /usr/include/x86_64-linux-gnu -internal-externc-isystem /include -internal-externc-isystem /usr/include -fdeprecated-macro -fdebug-compilation-dir /home/jsren -ferror-limit 19 -fmessage-length 0 -fobjc-runtime=gcc -fcxx-exceptions -fexceptions -fdiagnostics-show-option -fcolor-diagnostics -ast-dump -o ast_test1.o -x c++ "/media/jsren/F6F8FA04F8F9C2C3/Source/llvm/msc/ast_test1.cpp"
+/source/build-llvm/bin/clang-7 -- "-cc1" "-triple" "x86_64-unknown-linux-gnu" "-emit-obj" "-mrelax-all" "-disable-free" "-main-file-name" "ast_test1.cpp" "-mrelocation-model" "static" "-mthread-model" "posix" "-mdisable-fp-elim" "-fmath-errno" "-masm-verbose" "-mconstructor-aliases" "-munwind-tables" "-fuse-init-array" "-target-cpu" "x86-64" "-dwarf-column-info" "-debugger-tuning=gdb" "-resource-dir" "/source/build-llvm/lib/clang/7.0.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0/backward" "-internal-isystem" "/usr/local/include" "-internal-isystem" "/source/build-llvm/lib/clang/7.0.0/include" "-internal-externc-isystem" "/usr/include/x86_64-linux-gnu" "-internal-externc-isystem" "/include" "-internal-externc-isystem" "/usr/include" "-fdeprecated-macro" "-fdebug-compilation-dir" "/source" "-ferror-limit" "19" "-fmessage-length" "282" "-fobjc-runtime=gcc" "-fcxx-exceptions" "-fexceptions" "-fdiagnostics-show-option" "-fcolor-diagnostics" "-o" "/tmp/ast_test1-e4b7bd.o" "-x" "c++" "/source/llvm/msc/cg_test1.cpp"
+
+"/usr/bin/ld" "-z" "relro" "--hash-style=gnu" "--eh-frame-hdr" "-m" "elf_x86_64" "-dynamic-linker" "/lib64/ld-linux-x86-64.so.2" "-o" "a.out" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu/crt1.o" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu/crti.o" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/crtbegin.o" "-L/usr/lib/gcc/x86_64-linux-gnu/7.3.0" "-L/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu" "-L/lib/x86_64-linux-gnu" "-L/lib/../lib64" "-L/usr/lib/x86_64-linux-gnu" "-L/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../.." "-L/source/build-llvm/bin/../lib" "-L/lib" "-L/usr/lib" "/tmp/ast_test1-e4b7bd.o" "-lstdc++" "-lm" "-lgcc_s" "-lgcc" "-lc" "-lgcc_s" "-lgcc" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/crtend.o" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu/crtn.o"
+
+`Actions` (SemaDecl.cpp) is used to emit declarations
+IdentifierTable.h:501 <- IdentifierTable::get inserts identifier name into table
+Table is in Preprocessor.h:230 (getIdentifierTable)
+Identifier.setIdentifierInfo()
+
+
+ParseAST.cpp:116 <- ParseAST
+Parser.cpp:546 <- Parser::ParseTopLevelDecl
+Parser.cpp:1019 <- Parser::ParseDeclarationOrFunctionDefinition
+ParseDeclCXX.cpp:1357 <- Parser::ParseClassSpecifier
+ParseDeclCXX.cpp:3109 <- Parser::ParseCXXMemberSpecification (parse class members)
+ParseDeclCXX.cpp:3012 <- ParseCXXClassMemberDeclarationWithPragmas
+--------------------------------
+ParseDecl.cpp:6065 <- Parser::ParseFunctionDeclarator
+ParseParameterDeclarationClause
+ParseDecl.cpp:2922 <- ParseDeclarationSpecifiers (type)
+ParseDecl.cpp:5568 <- ParseDirectDeclarator [ParseDecl.cpp:2922 for type]
+                      SetTypeSpecType(DeclSpec::TST_typename, ..., TypeRep, ...)
+ParseDecl.cpp:5346 <- ParseDeclaratorInternal (identifier)
+ParseExprCXX.cpp:2472 <- Parser::ParseUnqualifiedId
+
+Parser.cpp:1050 <- Parser::ParseFunctionDefinition (function body)
+ParseStmt.cpp:1957 <- ParseFunctionStatementBody
+
+Actions.ActOnParamDeclarator <- adds param decl. to scope
+
+ModuleBuilder.cpp <- contains top-level listeners
+CodeGenModule.cpp:4406 <- EmitTopLevelDecl, lower-level listeners
+CodeGenModule.cpp:2274 <- EmitGlobalDefinition
+CodeGenFunction.cpp:1296 <- Generate function body
+CodeGenFunction.cpp:1193 <- Generate normal function body
+CGDecl.cpp:955 <- EmitAutoVarDecl
+CGDecl.cpp:1500 <- emitAutoVarTypeCleanup
+CGCleanup.cpp:771 <- PopCleanupBlock
+CGCleanup.cpp:568 <- EmitCleanup
+CGDecl.cpp:468 <- DestroyObject::Emit
+CGDecl.cpp:1687 <- CodeGenFunction::emitDestroy
+CGClass.cpp:1989 <- CodeGenFunction::destroyCXXObject (CG for destructor)
+ItaniumCXXABI.cpp:1475 <- ItaniumCXXABI::EmitDestructorCall
+
+CGStmt.cpp:605 <- CodeGenFunction::EmitIfStmt
+CGStmt.cpp:639 <- createBasicBlock("if.then")
+
+
+1. Use 'EmitAutoVarAlloca' to create execption object in function prelude?
+2. Call 'EmitCXXMemberOrOperatorCall' with condition upon object destruction
+   for which objects?? If return value...
+3. Emit exception variable in CodeGenFunction:1294
+
+------------------------------------------------------------
+Issues with Herb's approach:
+    1. Ctors and Dtors have different signatures
+    2. Functions in general have different signatures/calling between throws and noexcept
+Solution:
+    _every function_ has the exception parameter
+
+
+Parser gets ID from lexer, then gets ParsedType via
+(Actions)Sema::ClassifyName
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+EmitConditionalDtorDeleteCall

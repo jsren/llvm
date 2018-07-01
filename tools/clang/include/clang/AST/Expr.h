@@ -111,6 +111,7 @@ protected:
        bool TD, bool VD, bool ID, bool ContainsUnexpandedParameterPack)
     : Stmt(SC)
   {
+    ExprBits.IsEmpty = 0;
     ExprBits.TypeDependent = TD;
     ExprBits.ValueDependent = VD;
     ExprBits.InstantiationDependent = ID;
@@ -151,6 +152,15 @@ public:
   /// Set whether this expression is value-dependent or not.
   void setValueDependent(bool VD) {
     ExprBits.ValueDependent = VD;
+  }
+
+  // Set whether this expression is empty (created by __builtin_return_empty)
+  void setEmpty(bool isEmpty) {
+    ExprBits.IsEmpty = isEmpty;
+  }
+
+  bool isEmpty() const {
+    return ExprBits.IsEmpty != 0;
   }
 
   /// isTypeDependent - Determines whether this expression is
@@ -2779,6 +2789,7 @@ protected:
                ty->containsUnexpandedParameterPack()) ||
               (op && op->containsUnexpandedParameterPack()))),
         Op(op) {
+    setEmpty(op && op->isEmpty());
     CastExprBits.Kind = kind;
     setBasePathSize(BasePathSize);
     assert(CastConsistency());

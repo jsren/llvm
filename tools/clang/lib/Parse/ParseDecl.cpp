@@ -6204,6 +6204,60 @@ void Parser::ParseFunctionDeclarator(Declarator &D,
       if (ESpecType != EST_None)
         EndLoc = ESpecRange.getEnd();
 
+      if (/*!IsCXX11MemberFunction &&*/ ESpecType != ExceptionSpecificationType::EST_BasicNoexcept) {
+        // Add implicit execption-object parameter
+        CXXScopeSpec SS{};
+        DeclSpec DS(AttrFactory);
+        const char* PrevSpec = "";
+        unsigned int diagID = 0;
+
+        Token TypeTok;
+        TypeTok.startToken();
+        TypeTok.setKind(tok::raw_identifier);
+        TypeTok.setLength(13);
+        TypeTok.setRawIdentifierData("__exception_t");
+
+        Token RefTok;
+        RefTok.startToken();
+        RefTok.setLength(1);
+        RefTok.setKind(tok::amp);
+
+        IdentifierInfo* TII = PP.LookUpIdentifierInfo(TypeTok);
+
+        Sema::NameClassification Classification = Actions.ClassifyName(
+          getCurScope(), SS, TII, Tok.getLocation(), RefTok, false,
+          std::unique_ptr<CorrectionCandidateCallback>{});
+
+        if (Classification.getKind() != Sema::NameClassificationKind::NC_Unknown) {
+          ParsedType T = Classification.getType();
+
+          Declarator ParmDeclarator(DS, DeclaratorContext::PrototypeContext);
+          DS.SetTypeSpecType(DeclSpec::TST_typename, Tok.getLocation(),
+            PrevSpec, diagID, T, Actions.getPrintingPolicy());
+
+          // Make reference type
+          ParmDeclarator.AddTypeInfo(
+            DeclaratorChunk::getReference(
+                            DS.getTypeQualifiers(),
+                            Tok.getLocation(),
+                            true),
+            DS.getAttributes(),
+            SourceLocation());
+
+          IdentifierInfo& II = PP.getIdentifierTable().get("__exception");
+          ParmDeclarator.getName().setIdentifier(&II, Tok.getLocation());
+
+          IdentifierInfo* ParmII = ParmDeclarator.getIdentifier();
+          std::unique_ptr<CachedTokens> DefArgToks;
+
+          Decl *Param = Actions.ActOnParamDeclarator(getCurScope(), ParmDeclarator);
+          ParamInfo.insert(ParamInfo.begin(), DeclaratorChunk::ParamInfo(ParmII,
+                                                              Tok.getLocation(),
+                                                              Param,
+                                                              std::move(DefArgToks)));
+        }
+      }
+
       // Parse attribute-specifier-seq[opt]. Per DR 979 and DR 1297, this goes
       // after the exception-specification.
       MaybeParseCXX11Attributes(FnAttrs);

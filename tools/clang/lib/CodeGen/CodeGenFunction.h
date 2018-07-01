@@ -3481,6 +3481,13 @@ public:
                               llvm::Value *ImplicitParam,
                               QualType ImplicitParamTy, const CallExpr *E,
                               CallArgList *RtlArgs);
+  RValue
+  EmitCXXMemberOrOperatorCall(const CXXMethodDecl *MD,
+                              const CGCallee &Callee,
+                              ReturnValueSlot ReturnValue, llvm::Value *This,
+                              llvm::Value *ImplicitParam,
+                              QualType ImplicitParamTy, const Expr *Cond,
+                              const CallExpr *CE, CallArgList *RtlArgs);
   RValue EmitCXXDestructorCall(const CXXDestructorDecl *DD,
                                const CGCallee &Callee,
                                llvm::Value *This, llvm::Value *ImplicitParam,

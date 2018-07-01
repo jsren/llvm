@@ -93,6 +93,38 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
                   CE ? CE->getExprLoc() : SourceLocation());
 }
 
+RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
+    const CXXMethodDecl *MD, const CGCallee &Callee,
+    ReturnValueSlot ReturnValue,
+    llvm::Value *This, llvm::Value *ImplicitParam, QualType ImplicitParamTy,
+    const Expr *Cond, const CallExpr *CE, CallArgList *RtlArgs) {
+  const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
+  CallArgList Args;
+
+  // C99 6.8.4.1: The first substatement is executed if the expression compares
+  // unequal to 0.  The condition must be a scalar type.
+  LexicalScope ConditionScope(*this, Cond->getSourceRange());
+
+  llvm::BasicBlock *ThenBlock = createBasicBlock("if.then");
+  llvm::BasicBlock *ContBlock = createBasicBlock("if.end");
+  EmitBranchOnBoolExpr(Cond, ThenBlock, ContBlock, 1);
+  EmitBlock(ThenBlock);
+
+  RValue out;
+  {
+    RunCleanupsScope ThenScope(*this);
+    MemberCallInfo CallInfo = commonEmitCXXMemberOrOperatorCall(
+        *this, MD, This, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
+    auto &FnInfo = CGM.getTypes().arrangeCXXMethodCall(
+        Args, FPT, CallInfo.ReqArgs, CallInfo.PrefixSize);
+    out = EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr,
+                    CE ? CE->getExprLoc() : SourceLocation());
+  }
+  EmitBranch(ContBlock);
+  EmitBlock(ContBlock, true);
+  return out;
+}
+
 RValue CodeGenFunction::EmitCXXDestructorCall(
     const CXXDestructorDecl *DD, const CGCallee &Callee, llvm::Value *This,
     llvm::Value *ImplicitParam, QualType ImplicitParamTy, const CallExpr *CE,

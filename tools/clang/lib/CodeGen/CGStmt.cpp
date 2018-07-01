@@ -1068,7 +1068,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     // for side effects.
     if (RV)
       EmitAnyExpr(RV);
-  } else if (!RV) {
+  } else if (!RV || RV->isEmpty()) {
     // Do nothing (return value is left uninitialized)
   } else if (FnRetTy->isReferenceType()) {
     // If this function returns a reference, take the address of the expression

@@ -1335,6 +1335,14 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
+  // Emit implicit exception decl
+  /*if (getLangOpts().CPlusPlus && false) {
+    ASTContext& Ctx = GD.getDecl()->getASTContext();
+    IdentifierInfo& II = IDTable.get("__exception_obj");
+    EmitAutoVarAlloca(VarDecl::Create(Ctx, nullptr, Loc, Loc, &II,
+      QualType(BuiltinType(BuiltinType::Kind::Bool), 0)));
+  }*/
+
   // Generate the body of the function.
   PGO.assignRegionCounters(GD, CurFn);
   if (isa<CXXDestructorDecl>(FD))
