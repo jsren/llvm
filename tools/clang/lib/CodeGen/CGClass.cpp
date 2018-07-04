@@ -2113,6 +2113,7 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   CGCXXABI::AddedStructorArgs ExtraArgs =
       CGM.getCXXABI().addImplicitConstructorArgs(*this, D, Type, ForVirtualBase,
                                                  Delegating, Args);
+
   // Emit the call.
   llvm::Constant *CalleePtr =
     CGM.getAddrOfCXXStructor(D, getFromCtorType(Type));

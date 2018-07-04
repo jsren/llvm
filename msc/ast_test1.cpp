@@ -10,29 +10,30 @@ struct Payload
 {
     int i = 0x42;
 
-    Payload() noexcept// = delete; {
+    Payload()// = delete; {
     {
         //*(volatile int*)(0xC0FFEEBA) = 0xBE;
     }
-    Payload(const Payload&) noexcept {
-        //*(volatile int*)(0xC0FFEEBA) = 0xBE;
+    Payload(const Payload& o) {
+        i = o.i;
     };
-    Payload& operator =(const Payload&) noexcept = delete;
+    Payload& operator =(const Payload&) = delete;
 
-    ~Payload() noexcept {
+    ~Payload() {
         //*(volatile int*)(0xC0FFEEBA) = 0xBE;
     }
 };
 
-
 Payload test()
 {
     //__exception.success = false;
-    return Payload();
+    auto P = Payload();
+    P.i = 1;
+    return P;
     //return __builtin_return_empty();
 }
 
-int main() noexcept
+int main()
 {
     __exception_t __dummy;
 

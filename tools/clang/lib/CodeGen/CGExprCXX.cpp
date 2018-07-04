@@ -398,8 +398,7 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
       }
       EmitCXXMemberOrOperatorCall(
           CalleeDecl, Callee, ReturnValue, This.getPointer(),
-          /*ImplicitParam=*/nullptr, QualType(),
-          CE, nullptr);
+          /*ImplicitParam=*/nullptr, QualType(), CE, nullptr);
     }
     return RValue::get(nullptr);
   }

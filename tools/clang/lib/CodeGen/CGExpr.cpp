@@ -4548,8 +4548,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
 
   const Decl *TargetDecl = OrigCallee.getAbstractInfo().getCalleeDecl();
 
-  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(TargetDecl);
-  if (FD)
+  if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(TargetDecl))
     // We can only guarantee that a function is called from the correct
     // context/function based on the appropriate target attributes,
     // so only check in the case where we have both always_inline and target
@@ -4685,12 +4684,10 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     }
   }
 
-  if (FD && getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain())
-  {
+  if (FD && getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain()) {
     // Push exception object pointer.
     LoadExceptParam(Args);
   }
-
   EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), E->arguments(),
                E->getDirectCallee(), /*ParamsToSkip*/ 0, Order);
 

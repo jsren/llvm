@@ -412,7 +412,6 @@ CodeGenTypes::arrangeCXXConstructorCall(const CallArgList &args,
   for (const auto &Arg : args)
     ArgTypes.push_back(Context.getCanonicalParamType(Arg.Ty));
     
-
   // +1 for implicit this, which should always be args[0].
   unsigned TotalPrefixArgs = 1 + ExtraPrefixArgs;
 
@@ -4230,8 +4229,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   // during IRGen changes that it's way better for debugging to catch
   // it ourselves here.
 #ifndef NDEBUG
-  auto sz = IRCallArgs.size();
-  assert(sz == IRFuncTy->getNumParams() || IRFuncTy->isVarArg());
+  assert(IRCallArgs.size() == IRFuncTy->getNumParams() || IRFuncTy->isVarArg());
   for (unsigned i = 0; i < IRCallArgs.size(); ++i) {
     // Inalloca argument can have different type.
     if (IRFunctionArgs.hasInallocaArg() &&
