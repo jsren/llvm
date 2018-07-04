@@ -1405,7 +1405,7 @@ private:
   CharUnits CXXABIThisAlignment;
   CharUnits CXXThisAlignment;
 
-  ImplicitParamDecl *CXXABIExceptDecl{};
+  VarDecl *CXXABIExceptDecl{};
   llvm::Value *CXXABIExceptValue{};
   llvm::Value *CXXExceptValue{};
   CharUnits CXXABIExceptAlignment{};
@@ -1480,9 +1480,12 @@ private:
   void EmitOpenCLKernelMetadata(const FunctionDecl *FD,
                                 llvm::Function *Fn);
 
+
 public:
   CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext=false);
   ~CodeGenFunction();
+
+  void LoadExceptParam(CallArgList& Args);
 
   CodeGenTypes &getTypes() const { return CGM.getTypes(); }
   ASTContext &getContext() const { return CGM.getContext(); }

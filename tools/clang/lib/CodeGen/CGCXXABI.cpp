@@ -128,7 +128,7 @@ bool CGCXXABI::isZeroInitializable(const MemberPointerType *MPT) {
 void CGCXXABI::buildExceptionParam(CodeGenFunction &CGF, FunctionArgList &params) {
   IdentifierInfo* II = &CGM.getContext().Idents.get("__exception");
   auto& Cxt = CGM.getContext();
-  auto T = Cxt.getPointerType(Cxt.getExceptionObjectType());
+  auto T = Cxt.getExceptionParamType();
 
   auto *Decl = ImplicitParamDecl::Create(
       CGM.getContext(), nullptr, CGF.CurGD.getDecl()->getLocation(),

@@ -5283,6 +5283,9 @@ QualType ASTContext::getSignatureParameterType(QualType T) const {
 QualType ASTContext::getExceptionObjectType() const {
   return QualType(ExceptObjType->getTypeForDecl(), 0);
 }
+QualType ASTContext::getExceptionParamType() const {
+  return getPointerType(getExceptionObjectType());
+}
 
 QualType ASTContext::getExceptionObjectType(QualType T) const {
   // C++ [except.throw]p3:

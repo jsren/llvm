@@ -1512,6 +1512,7 @@ public:
                                                 bool IsDependent) const;
 
   QualType getExceptionObjectType() const;
+  QualType getExceptionParamType() const;
 
   /// Return the unique reference to the type for the specified TagDecl
   /// (struct/union/class/enum) decl.

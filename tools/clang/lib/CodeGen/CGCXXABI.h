@@ -53,7 +53,7 @@ protected:
   ImplicitParamDecl *getThisDecl(CodeGenFunction &CGF) {
     return CGF.CXXABIThisDecl;
   }
-  ImplicitParamDecl *getExceptDecl(CodeGenFunction &CGF) {
+  VarDecl *getExceptDecl(CodeGenFunction &CGF) {
     return CGF.CXXABIExceptDecl;
   }
   llvm::Value *getThisValue(CodeGenFunction &CGF) {

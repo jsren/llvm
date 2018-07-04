@@ -1649,40 +1649,7 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
         return ExprError();
       }
 
-      if (OpKind == tok::l_paren || !LHS.isInvalid())
-      {
-        if (getLangOpts().CPlusPlus) {
-          Expr* expr = LHS.get();
-          const ImplicitCastExpr* Call = dyn_cast_or_null<ImplicitCastExpr>(expr);
-
-          if (Call != nullptr) {
-            auto subexpr = Call->getSubExprAsWritten();
-            auto declref = dyn_cast_or_null<DeclRefExpr>(subexpr);
-            const FunctionDecl* FD = dyn_cast_or_null<FunctionDecl>(declref->getDecl());
-            const FunctionProtoType *Proto = FD->getType()->getAs<FunctionProtoType>();
-            ExceptionSpecificationType EST = Proto->getExceptionSpecType();
-
-            if (EST != ExceptionSpecificationType::EST_BasicNoexcept) {
-              Token TypeTok;
-              TypeTok.startToken();
-              TypeTok.setKind(tok::raw_identifier);
-              TypeTok.setLength(11);
-              TypeTok.setRawIdentifierData("__exception");
-
-              IdentifierInfo* II = PP.LookUpIdentifierInfo(TypeTok);
-
-              UnqualifiedId Name;
-              CXXScopeSpec ScopeSpec;
-              Name.setIdentifier(II, SourceLocation());
-              auto Res = Actions.ActOnIdExpression(
-                  getCurScope(), ScopeSpec, SourceLocation(), Name, false,
-                  false, std::unique_ptr<CastExpressionIdValidator>{},
-                  /*IsInlineAsmIdentifier=*/false, nullptr);
-              ArgExprs.push_back(Res.get());
-            }
-          }
-        }
-
+      if (OpKind == tok::l_paren || !LHS.isInvalid()) {
         if (Tok.isNot(tok::r_paren)) {
           if (ParseExpressionList(ArgExprs, CommaLocs, [&] {
                 Actions.CodeCompleteCall(getCurScope(), LHS.get(), ArgExprs);
@@ -1715,9 +1682,9 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
           PT.consumeClose();
         LHS = ExprError();
       } else {
-        /*assert((ArgExprs.size() == 0 || 
+        assert((ArgExprs.size() == 0 || 
                 ArgExprs.size()-1 == CommaLocs.size())&&
-               "Unexpected number of commas!");*/
+               "Unexpected number of commas!");
         LHS = Actions.ActOnCallExpr(getCurScope(), LHS.get(), Loc,
                                     ArgExprs, Tok.getLocation(),
                                     ExecConfig);

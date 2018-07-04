@@ -187,6 +187,12 @@ const CGFunctionInfo &
 CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionProtoType> FTP,
                                       const FunctionDecl *FD) {
   SmallVector<CanQualType, 16> argTypes;
+
+  if (Context.getLangOpts().CPlusPlus && (!FD || !(FD->isExternC() || FD->isMain()))) {
+    // Add the '__exception' pointer.
+    auto T = Context.getExceptionParamType().getCanonicalType();
+    argTypes.push_back(CanQualType::CreateUnsafe(T));
+  }
   return ::arrangeLLVMFunctionInfo(*this, /*instanceMethod=*/false, argTypes,
                                    FTP, FD);
 }
@@ -250,6 +256,10 @@ CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
   else
     argTypes.push_back(Context.VoidPtrTy);
 
+  // Add the '__exception' pointer.
+  auto T = Context.getExceptionParamType().getCanonicalType();
+  argTypes.push_back(CanQualType::CreateUnsafe(T));
+
   return ::arrangeLLVMFunctionInfo(
       *this, true, argTypes,
       FTP->getCanonicalTypeUnqualified().getAs<FunctionProtoType>(), MD);
@@ -303,6 +313,10 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
   SmallVector<CanQualType, 16> argTypes;
   SmallVector<FunctionProtoType::ExtParameterInfo, 16> paramInfos;
   argTypes.push_back(GetThisType(Context, MD->getParent()));
+
+  // Add the '__exception' pointer.
+  auto T = Context.getExceptionParamType().getCanonicalType();
+  argTypes.push_back(CanQualType::CreateUnsafe(T));
 
   bool PassParams = true;
 
@@ -397,6 +411,7 @@ CodeGenTypes::arrangeCXXConstructorCall(const CallArgList &args,
   SmallVector<CanQualType, 16> ArgTypes;
   for (const auto &Arg : args)
     ArgTypes.push_back(Context.getCanonicalParamType(Arg.Ty));
+    
 
   // +1 for implicit this, which should always be args[0].
   unsigned TotalPrefixArgs = 1 + ExtraPrefixArgs;
@@ -4215,7 +4230,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   // during IRGen changes that it's way better for debugging to catch
   // it ourselves here.
 #ifndef NDEBUG
-  assert(IRCallArgs.size() == IRFuncTy->getNumParams() || IRFuncTy->isVarArg());
+  auto sz = IRCallArgs.size();
+  assert(sz == IRFuncTy->getNumParams() || IRFuncTy->isVarArg());
   for (unsigned i = 0; i < IRCallArgs.size(); ++i) {
     // Inalloca argument can have different type.
     if (IRFunctionArgs.hasInallocaArg() &&

@@ -4685,13 +4685,10 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     }
   }
 
-  if (FD && getLangOpts().CPlusPlus && !FD->isExternC())
+  if (FD && getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain())
   {
     // Push exception object pointer.
-    llvm::Value* ExceptionObj =
-      GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
-    Args.add(RValue::get(ExceptionObj),
-      getContext().getPointerType(getContext().getExceptionObjectType()));
+    LoadExceptParam(Args);
   }
 
   EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), E->arguments(),

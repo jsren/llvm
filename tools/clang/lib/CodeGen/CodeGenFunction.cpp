@@ -1235,6 +1235,21 @@ static void TryMarkNoThrow(llvm::Function *F) {
   F->setDoesNotThrow();
 }
 
+void CodeGenFunction::LoadExceptParam(CallArgList& Args) {
+      // Push exception object pointer.
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+
+  llvm::Value *Addr =
+    EmitLoadOfScalar(GetAddrOfLocalVar(CXXABIExceptDecl),
+                      /*Volatile=*/false,
+                      getContext().getExceptionParamType(),
+                      CXXABIExceptDecl->getLocation());
+
+  Args.add(RValue::get(Addr),
+    getContext().getExceptionParamType());
+}
+
 QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
                                                FunctionArgList &Args) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
@@ -1249,7 +1264,7 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
     CGM.getCXXABI().buildThisParam(*this, Args);
   }
 
-  if (!FD->isExternC()) {
+  if (getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain()) {
     CGM.getCXXABI().buildExceptionParam(*this, Args);
   }
 
@@ -1341,11 +1356,18 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
 
   // Emit implicit exception object if within a C function or main
   if (getLangOpts().CPlusPlus && (FD->isExternC() || FD->isMain())) {
-    ASTContext& Ctx = getContext();
-    IdentifierInfo* II = &Ctx.Idents.get("__exception_obj");
-    auto Var = VarDecl::Create(Ctx, const_cast<DeclContext*>(FD->getDeclContext()),
-          Loc, Loc, II, Ctx.getExceptionObjectType(), nullptr, SC_Auto);
-    AutoVarEmission Exc = EmitAutoVarAlloca(*Var);
+    ASTContext& C = getContext();
+    IdentifierInfo* IIObj = &C.Idents.get("__exception_obj");
+    IdentifierInfo* IIArg = &C.Idents.get("__exception");
+    auto VarObj = VarDecl::Create(C, const_cast<DeclContext*>(FD->getDeclContext()),
+          Loc, Loc, IIObj, C.getExceptionObjectType(), nullptr, SC_Auto);
+    auto VarArg = VarDecl::Create(C, const_cast<DeclContext*>(FD->getDeclContext()),
+          Loc, Loc, IIArg, C.getExceptionParamType(), nullptr, SC_Auto);
+    auto Obj = EmitAutoVarAlloca(*VarObj);
+    auto Arg = EmitAutoVarAlloca(*VarArg);
+    LValue Addr = MakeAddrLValue(Arg.getAllocatedAddress(), C.getExceptionParamType());
+    EmitStoreThroughLValue(RValue::get(Obj.getAllocatedAddress().getPointer()), Addr);
+    CXXABIExceptDecl = VarArg;
   }
 
   // Generate the body of the function.

@@ -35,8 +35,7 @@ struct MemberCallInfo {
 
 static MemberCallInfo
 commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
-                                  llvm::Value *ExceptionObj, llvm::Value *This,
-                                  llvm::Value *ImplicitParam,
+                                  llvm::Value *This, llvm::Value *ImplicitParam,
                                   QualType ImplicitParamTy, const CallExpr *CE,
                                   CallArgList &Args, CallArgList *RtlArgs) {
   assert(CE == nullptr || isa<CXXMemberCallExpr>(CE) ||
@@ -51,14 +50,13 @@ commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
   Args.add(RValue::get(This),
            RD ? C.getPointerType(C.getTypeDeclType(RD)) : C.VoidPtrTy);
 
-  // Push the exception obj
-  auto ET = C.getPointerType(C.getExceptionObjectType());
-  Args.add(RValue::get(ExceptionObj), ET);
-
   // If there is an implicit parameter (e.g. VTT), emit it.
   if (ImplicitParam) {
     Args.add(RValue::get(ImplicitParam), ImplicitParamTy);
   }
+
+  // Push the exception obj
+  CGF.LoadExceptParam(Args);
 
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
   RequiredArgs required = RequiredArgs::forPrototypePlus(FPT, Args.size(), MD);
@@ -90,10 +88,8 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
     const CallExpr *CE, CallArgList *RtlArgs) {
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
   CallArgList Args;
-  llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
   MemberCallInfo CallInfo = commonEmitCXXMemberOrOperatorCall(
-      *this, MD, This, ExceptionObj, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
+      *this, MD, This, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
   auto &FnInfo = CGM.getTypes().arrangeCXXMethodCall(
       Args, FPT, CallInfo.ReqArgs, CallInfo.PrefixSize);
   return EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr,
@@ -117,14 +113,11 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
   EmitBranchOnBoolExpr(Cond, ThenBlock, ContBlock, 1);
   EmitBlock(ThenBlock);
 
-  llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
-
   RValue out;
   {
     RunCleanupsScope ThenScope(*this);
     MemberCallInfo CallInfo = commonEmitCXXMemberOrOperatorCall(
-        *this, MD, This, ExceptionObj, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
+        *this, MD, This, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
     auto &FnInfo = CGM.getTypes().arrangeCXXMethodCall(
         Args, FPT, CallInfo.ReqArgs, CallInfo.PrefixSize);
     out = EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr,
@@ -140,9 +133,7 @@ RValue CodeGenFunction::EmitCXXDestructorCall(
     llvm::Value *This, llvm::Value *ImplicitParam,
     QualType ImplicitParamTy, const CallExpr *CE, StructorType Type) {
   CallArgList Args;
-  llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
-  commonEmitCXXMemberOrOperatorCall(*this, DD, This, ExceptionObj, ImplicitParam,
+  commonEmitCXXMemberOrOperatorCall(*this, DD, This, ImplicitParam,
                                     ImplicitParamTy, CE, Args, nullptr);
   return EmitCall(CGM.getTypes().arrangeCXXStructorDeclaration(DD, Type),
                   Callee, ReturnValueSlot(), Args);
@@ -498,10 +489,7 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   Args.add(RValue::get(ThisPtrForCall), ThisType);
 
   // Push exception object pointer.
-  llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
-  Args.add(RValue::get(ExceptionObj),
-    getContext().getPointerType(getContext().getExceptionObjectType()));
+  LoadExceptParam(Args);
 
   RequiredArgs required =
       RequiredArgs::forPrototypePlus(FPT, 1, /*FD=*/nullptr);
