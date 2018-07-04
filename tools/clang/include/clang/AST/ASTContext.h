@@ -343,6 +343,11 @@ class ASTContext : public RefCountedBase<ASTContext> {
   /// The type for the C ucontext_t type.
   TypeDecl *ucontext_tDecl = nullptr;
 
+  // The type for the C++ __exception_t type.
+  public:
+  TypeDecl *ExceptObjType = nullptr;
+  private:
+
   /// Type for the Block descriptor for Blocks CodeGen.
   ///
   /// Since this is only used for generation of debug info, it is not
@@ -1505,6 +1510,8 @@ public:
   QualType getDeducedTemplateSpecializationType(TemplateName Template,
                                                 QualType DeducedType,
                                                 bool IsDependent) const;
+
+  QualType getExceptionObjectType() const;
 
   /// Return the unique reference to the type for the specified TagDecl
   /// (struct/union/class/enum) decl.

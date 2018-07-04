@@ -62,6 +62,40 @@ class TemplateParameterList;
 // C++ Expressions.
 //===--------------------------------------------------------------------===//
 
+class CXXCallExpr : public CallExpr {
+
+Expr *ExceptionObj;
+
+public:
+  CXXCallExpr(ASTContext &C, Stmt::StmtClass SC, Expr *fn, ArrayRef<Expr*> args,
+                    QualType t, ExprValueKind VK, SourceLocation RP)
+      : CallExpr(C, SC, fn, args, t, VK, RP) {}
+
+  CXXCallExpr(ASTContext &C, Stmt::StmtClass SC, EmptyShell Empty)
+      : CallExpr(C, SC, Empty) {}
+
+  /// Retrieves the implicit object argument for the member call.
+  Expr *getImplicitExceptionArgument() const {
+    return ExceptionObj;
+  }
+  void setImplicitExceptionArgument(Expr *E) {
+    ExceptionObj = E;
+  }
+
+  /// Retrieves the CXXRecordDecl for the underlying type of
+  /// the exception object argument.
+  CXXRecordDecl *getRecordDecl() const {
+    Expr *E = getImplicitExceptionArgument();
+    if (!E)
+      return nullptr;
+    return E->getType()->getPointeeType()->getAsCXXRecordDecl();
+  }
+
+  SourceLocation getExprLoc() const LLVM_READONLY {
+    return getLocStart();
+  }
+};
+
 /// A call to an overloaded operator written using operator
 /// syntax.
 ///

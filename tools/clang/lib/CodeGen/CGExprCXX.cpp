@@ -35,7 +35,8 @@ struct MemberCallInfo {
 
 static MemberCallInfo
 commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
-                                  llvm::Value *This, llvm::Value *ImplicitParam,
+                                  llvm::Value *ExceptionObj, llvm::Value *This,
+                                  llvm::Value *ImplicitParam,
                                   QualType ImplicitParamTy, const CallExpr *CE,
                                   CallArgList &Args, CallArgList *RtlArgs) {
   assert(CE == nullptr || isa<CXXMemberCallExpr>(CE) ||
@@ -49,6 +50,10 @@ commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
       CGF.CGM.getCXXABI().getThisArgumentTypeForMethod(MD);
   Args.add(RValue::get(This),
            RD ? C.getPointerType(C.getTypeDeclType(RD)) : C.VoidPtrTy);
+
+  // Push the exception obj
+  auto ET = C.getPointerType(C.getExceptionObjectType());
+  Args.add(RValue::get(ExceptionObj), ET);
 
   // If there is an implicit parameter (e.g. VTT), emit it.
   if (ImplicitParam) {
@@ -80,13 +85,15 @@ commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
 
 RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
     const CXXMethodDecl *MD, const CGCallee &Callee,
-    ReturnValueSlot ReturnValue,
-    llvm::Value *This, llvm::Value *ImplicitParam, QualType ImplicitParamTy,
+    ReturnValueSlot ReturnValue, llvm::Value *This,
+    llvm::Value *ImplicitParam, QualType ImplicitParamTy,
     const CallExpr *CE, CallArgList *RtlArgs) {
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
   CallArgList Args;
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
   MemberCallInfo CallInfo = commonEmitCXXMemberOrOperatorCall(
-      *this, MD, This, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
+      *this, MD, This, ExceptionObj, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
   auto &FnInfo = CGM.getTypes().arrangeCXXMethodCall(
       Args, FPT, CallInfo.ReqArgs, CallInfo.PrefixSize);
   return EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr,
@@ -110,11 +117,14 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
   EmitBranchOnBoolExpr(Cond, ThenBlock, ContBlock, 1);
   EmitBlock(ThenBlock);
 
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+
   RValue out;
   {
     RunCleanupsScope ThenScope(*this);
     MemberCallInfo CallInfo = commonEmitCXXMemberOrOperatorCall(
-        *this, MD, This, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
+        *this, MD, This, ExceptionObj, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
     auto &FnInfo = CGM.getTypes().arrangeCXXMethodCall(
         Args, FPT, CallInfo.ReqArgs, CallInfo.PrefixSize);
     out = EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr,
@@ -126,11 +136,13 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
 }
 
 RValue CodeGenFunction::EmitCXXDestructorCall(
-    const CXXDestructorDecl *DD, const CGCallee &Callee, llvm::Value *This,
-    llvm::Value *ImplicitParam, QualType ImplicitParamTy, const CallExpr *CE,
-    StructorType Type) {
+    const CXXDestructorDecl *DD, const CGCallee &Callee,
+    llvm::Value *This, llvm::Value *ImplicitParam,
+    QualType ImplicitParamTy, const CallExpr *CE, StructorType Type) {
   CallArgList Args;
-  commonEmitCXXMemberOrOperatorCall(*this, DD, This, ImplicitParam,
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+  commonEmitCXXMemberOrOperatorCall(*this, DD, This, ExceptionObj, ImplicitParam,
                                     ImplicitParamTy, CE, Args, nullptr);
   return EmitCall(CGM.getTypes().arrangeCXXStructorDeclaration(DD, Type),
                   Callee, ReturnValueSlot(), Args);
@@ -395,7 +407,8 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
       }
       EmitCXXMemberOrOperatorCall(
           CalleeDecl, Callee, ReturnValue, This.getPointer(),
-          /*ImplicitParam=*/nullptr, QualType(), CE, nullptr);
+          /*ImplicitParam=*/nullptr, QualType(),
+          CE, nullptr);
     }
     return RValue::get(nullptr);
   }
@@ -483,6 +496,12 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
 
   // Push the this ptr.
   Args.add(RValue::get(ThisPtrForCall), ThisType);
+
+  // Push exception object pointer.
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+  Args.add(RValue::get(ExceptionObj),
+    getContext().getPointerType(getContext().getExceptionObjectType()));
 
   RequiredArgs required =
       RequiredArgs::forPrototypePlus(FPT, 1, /*FD=*/nullptr);

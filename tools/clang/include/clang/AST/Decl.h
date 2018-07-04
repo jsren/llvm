@@ -1491,6 +1491,9 @@ public:
 
     /// Other implicit parameter
     Other,
+
+    // Paramter for C++ exception object
+    CXXExcept,
   };
 
   /// Create implicit parameter.

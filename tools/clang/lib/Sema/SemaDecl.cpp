@@ -14558,6 +14558,11 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
   // Notify the consumer that we've defined a tag.
   if (!Tag->isInvalidDecl())
     Consumer.HandleTagDeclDefinition(Tag);
+
+  // If exception type, assign to ASTContext
+  if (Tag->getName().str() == "__exception_t") {
+    getASTContext().ExceptObjType = Tag;
+  }
 }
 
 void Sema::ActOnObjCContainerFinishDefinition() {

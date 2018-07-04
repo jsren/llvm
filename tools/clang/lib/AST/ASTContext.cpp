@@ -5280,6 +5280,10 @@ QualType ASTContext::getSignatureParameterType(QualType T) const {
   return T.getUnqualifiedType();
 }
 
+QualType ASTContext::getExceptionObjectType() const {
+  return QualType(ExceptObjType->getTypeForDecl(), 0);
+}
+
 QualType ASTContext::getExceptionObjectType(QualType T) const {
   // C++ [except.throw]p3:
   //   A throw-expression initializes a temporary object, called the exception

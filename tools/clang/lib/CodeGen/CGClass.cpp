@@ -2008,6 +2008,12 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   // Push the this ptr.
   Args.add(RValue::get(This.getPointer()), D->getThisType(getContext()));
 
+  // Push exception object pointer.
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+  Args.add(RValue::get(ExceptionObj),
+    getContext().getPointerType(getContext().getExceptionObjectType()));
+
   // If this is a trivial constructor, emit a memcpy now before we lose
   // the alignment information on the argument.
   // FIXME: It would be better to preserve alignment information into CallArg.
@@ -2265,6 +2271,12 @@ CodeGenFunction::EmitSynthesizedCXXCopyCtorCall(const CXXConstructorDecl *D,
 
   // Push the this ptr.
   Args.add(RValue::get(This.getPointer()), D->getThisType(getContext()));
+
+  // Push exception object pointer.
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+  Args.add(RValue::get(ExceptionObj),
+    getContext().getPointerType(getContext().getExceptionObjectType()));
 
   // Push the src ptr.
   QualType QT = *(FPT->param_type_begin());

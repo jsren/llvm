@@ -1249,6 +1249,10 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
     CGM.getCXXABI().buildThisParam(*this, Args);
   }
 
+  if (!FD->isExternC()) {
+    CGM.getCXXABI().buildExceptionParam(*this, Args);
+  }
+
   // The base version of an inheriting constructor whose constructed base is a
   // virtual base is not passed any arguments (because it doesn't actually call
   // the inherited constructor).
@@ -1335,13 +1339,14 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
-  // Emit implicit exception decl
-  /*if (getLangOpts().CPlusPlus && false) {
-    ASTContext& Ctx = GD.getDecl()->getASTContext();
-    IdentifierInfo& II = IDTable.get("__exception_obj");
-    EmitAutoVarAlloca(VarDecl::Create(Ctx, nullptr, Loc, Loc, &II,
-      QualType(BuiltinType(BuiltinType::Kind::Bool), 0)));
-  }*/
+  // Emit implicit exception object if within a C function or main
+  if (getLangOpts().CPlusPlus && (FD->isExternC() || FD->isMain())) {
+    ASTContext& Ctx = getContext();
+    IdentifierInfo* II = &Ctx.Idents.get("__exception_obj");
+    auto Var = VarDecl::Create(Ctx, const_cast<DeclContext*>(FD->getDeclContext()),
+          Loc, Loc, II, Ctx.getExceptionObjectType(), nullptr, SC_Auto);
+    AutoVarEmission Exc = EmitAutoVarAlloca(*Var);
+  }
 
   // Generate the body of the function.
   PGO.assignRegionCounters(GD, CurFn);

@@ -67,5 +67,18 @@ Parser gets ID from lexer, then gets ParsedType via
 (Actions)Sema::ClassifyName
 
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Templates (shit)
 EmitConditionalDtorDeleteCall
+
+------------------------------------------
+Calling is either CallExpr, CXXOperatorCallExpr or CXXMemberCallExpr
+CodeGenFunction::EmitCallExpr - CGExpr.cpp:4275
+
+Don't add implicit exception for CXXPseudoDestructors
+
+-------------------------------------------
+MUST GO THROUGH ALL Sema::ActOnCallExpr calls
+to insert extra exception argument.
+
+ImplicitParamDecl!!!!
+void CodeGenFunction::setAddrOfLocalVar(const VarDecl *VD, Address Addr)!!!!
