@@ -154,7 +154,7 @@ public:
     ExprBits.ValueDependent = VD;
   }
 
-  // Set whether this expression is empty (created by __builtin_return_empty)
+  // Set whether this expression is empty (created by __builtin_empty_return)
   void setEmpty(bool isEmpty) {
     ExprBits.IsEmpty = isEmpty;
   }

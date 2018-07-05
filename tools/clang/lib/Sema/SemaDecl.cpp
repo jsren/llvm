@@ -14562,6 +14562,18 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
   // If exception type, assign to ASTContext
   if (Tag->getName().str() == "__exception_t") {
     getASTContext().ExceptObjType = Tag;
+
+    RecordDecl *RD = dyn_cast<RecordDecl>(Tag);
+    for (FieldDecl* field : RD->fields())
+    {
+      auto name = field->getName().str();
+      if (name == "success") {
+        getASTContext().ExceptMbrSuccess = field;
+      }
+      else if (name == "type") {
+        getASTContext().ExceptMbrType = field;
+      }
+    }
   }
 }
 

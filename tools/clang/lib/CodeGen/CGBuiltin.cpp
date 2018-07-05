@@ -1456,7 +1456,22 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
   switch (BuiltinID) {
   default: break;
-  case Builtin::BI__builtin_return_empty:
+  case Builtin::BI__builtin_throw: {
+    LValueBaseInfo BaseInfo;
+    TBAAAccessInfo TBAAInfo;
+    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+
+    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+  
+    // Assign false to success
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSuccess);
+    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
+
+    return RValue::getIgnored();
+  }
+  case Builtin::BI__builtin_empty_return:
     return RValue::getIgnored();
   case Builtin::BI__builtin___CFStringMakeConstantString:
   case Builtin::BI__builtin___NSStringMakeConstantString:

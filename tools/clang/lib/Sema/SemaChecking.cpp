@@ -1259,7 +1259,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (SemaBuiltinCallWithStaticChain(*this, TheCall))
       return ExprError();
     break;
-  case Builtin::BI__builtin_return_empty:
+  case Builtin::BI__builtin_empty_return:
     TheCall->setEmpty(true);
     if (SemaBuiltinCallReturnEmpty(*this, TheCall))
       return ExprError();

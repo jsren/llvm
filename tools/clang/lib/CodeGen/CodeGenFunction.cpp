@@ -1235,6 +1235,19 @@ static void TryMarkNoThrow(llvm::Function *F) {
   F->setDoesNotThrow();
 }
 
+llvm::Value *CodeGenFunction::LoadExceptParam() {
+  // Push exception object pointer.
+  llvm::Value* ExceptionObj =
+    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+
+  llvm::Value *Addr =
+    EmitLoadOfScalar(GetAddrOfLocalVar(CXXABIExceptDecl),
+                      /*Volatile=*/false,
+                      getContext().getExceptionParamType(),
+                      CXXABIExceptDecl->getLocation());
+  return Addr;
+}
+
 void CodeGenFunction::LoadExceptParam(CallArgList& Args) {
       // Push exception object pointer.
   llvm::Value* ExceptionObj =

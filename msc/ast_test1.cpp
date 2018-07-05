@@ -27,10 +27,11 @@ struct Payload
 Payload test()
 {
     //__exception.success = false;
+    __builtin_throw();
+    return __builtin_empty_return();
     auto P = Payload();
     P.i = 1;
     return P;
-    //return __builtin_return_empty();
 }
 
 int main()

@@ -1485,6 +1485,7 @@ public:
   CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext=false);
   ~CodeGenFunction();
 
+  llvm::Value *LoadExceptParam();
   void LoadExceptParam(CallArgList& Args);
 
   CodeGenTypes &getTypes() const { return CGM.getTypes(); }

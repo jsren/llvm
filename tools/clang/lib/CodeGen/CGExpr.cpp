@@ -4548,7 +4548,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
 
   const Decl *TargetDecl = OrigCallee.getAbstractInfo().getCalleeDecl();
 
-  if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(TargetDecl))
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(TargetDecl);
+  if (FD)
     // We can only guarantee that a function is called from the correct
     // context/function based on the appropriate target attributes,
     // so only check in the case where we have both always_inline and target

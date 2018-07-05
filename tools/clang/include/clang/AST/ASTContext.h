@@ -346,6 +346,8 @@ class ASTContext : public RefCountedBase<ASTContext> {
   // The type for the C++ __exception_t type.
   public:
   TypeDecl *ExceptObjType = nullptr;
+  FieldDecl *ExceptMbrSuccess = nullptr;
+  FieldDecl *ExceptMbrType = nullptr;
   private:
 
   /// Type for the Block descriptor for Blocks CodeGen.
