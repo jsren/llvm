@@ -1264,6 +1264,11 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (SemaBuiltinCallReturnEmpty(*this, TheCall))
       return ExprError();
     break;
+  case Builtin::BI__builtin_throw: {
+    if (checkArgCount(*this, TheCall, 1))
+      return ExprError();
+    break;
+  }
   case Builtin::BI__exception_code:
   case Builtin::BI_exception_code:
     if (SemaBuiltinSEHScopeCheck(*this, TheCall, Scope::SEHExceptScope,

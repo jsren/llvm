@@ -5,6 +5,9 @@ struct __exception_t
     void(*dtor)(void*);
 };
 
+extern "C" {
+    char __typeid_for_int = 0;
+}
 
 struct Payload
 {
@@ -27,7 +30,7 @@ struct Payload
 Payload test()
 {
     //__exception.success = false;
-    __builtin_throw();
+    __builtin_throw(1);
     return __builtin_empty_return();
     auto P = Payload();
     P.i = 1;

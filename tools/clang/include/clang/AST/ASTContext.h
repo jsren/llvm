@@ -348,6 +348,7 @@ class ASTContext : public RefCountedBase<ASTContext> {
   TypeDecl *ExceptObjType = nullptr;
   FieldDecl *ExceptMbrSuccess = nullptr;
   FieldDecl *ExceptMbrType = nullptr;
+  FieldDecl *ExceptMbrDtor = nullptr;
   private:
 
   /// Type for the Block descriptor for Blocks CodeGen.

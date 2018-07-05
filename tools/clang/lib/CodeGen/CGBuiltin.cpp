@@ -1469,6 +1469,44 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSuccess);
     EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
 
+    // Get name of type-id to reference
+    std::string Name = QualType::getAsString(E->getArg(0)->getType().split(),
+      getContext().getPrintingPolicy());
+
+    std::replace(Name.begin(), Name.end(), ' ', '_');
+    Name = "__typeid_for_" + Name;
+    const char* CName = Name.c_str();
+
+    IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
+    auto& Cxt = CGM.getContext();
+    auto T = Cxt.CharTy;
+
+    auto curDeclCtx = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
+    
+    DeclContext* TUnitDC = curDeclCtx;
+    while (!TUnitDC->isFileContext()) {
+      TUnitDC = TUnitDC->getLexicalParent();
+    }
+    
+    LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+      CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
+      CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
+      true);
+
+    VarDecl *Decl = VarDecl::Create(
+        CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
+        CurGD.getDecl()->getLocation(), II, T, nullptr, SC_Extern);
+
+    DeclRefExpr *DeclRef = DeclRefExpr::Create(CGM.getContext(), NestedNameSpecifierLoc{},
+        SourceLocation{}, Decl, false, SourceLocation{}, T, ExprValueKind::VK_LValue);
+
+    // Assign type-id to type
+    LValue LV1 = EmitDeclRefLValue(DeclRef);
+    LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptMbrType);
+    EmitStoreThroughLValue(RValue::get(LV1.getPointer()), LV2);
+
+    assert(Decl->getLanguageLinkage() == CLanguageLinkage);
+
     return RValue::getIgnored();
   }
   case Builtin::BI__builtin_empty_return:
