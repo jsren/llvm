@@ -4500,6 +4500,32 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     }
   }
 
+  // Emit check for exception failure
+  if (Callee.hasExceptParam)
+  {
+    LValueBaseInfo BaseInfo;
+    TBAAAccessInfo TBAAInfo;
+    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+
+    // Assign false to success
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+    RValue RV = EmitLoadOfLValue(LV, SourceLocation());
+    llvm::Value *Val = RV.getScalarVal();
+
+    llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+    llvm::BasicBlock *FalseBlock = createBasicBlock("if.end");
+
+    Builder.CreateCondBr(Val, TrueBlock, FalseBlock, nullptr, nullptr);
+    EmitBlock(TrueBlock);
+    // TODO: Emit goto
+    Builder.CreateBr(TrueBlock);
+    //EmitBranchThroughCleanup();
+    EmitBlock(FalseBlock, true);
+  }
+
   return Ret;
 }
 

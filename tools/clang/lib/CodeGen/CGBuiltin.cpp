@@ -1465,9 +1465,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
   
-    // Assign false to success
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSuccess);
-    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
+    // Assign true to threw
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+    EmitStoreThroughLValue(RValue::get(Builder.getTrue()), LV);
 
     // Get name of type-id to reference
     std::string Name = QualType::getAsString(E->getArg(0)->getType().split(),

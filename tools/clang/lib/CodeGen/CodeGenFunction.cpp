@@ -1378,6 +1378,13 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
           Loc, Loc, IIArg, C.getExceptionParamType(), nullptr, SC_Auto);
     auto Obj = EmitAutoVarAlloca(*VarObj);
     auto Arg = EmitAutoVarAlloca(*VarArg);
+
+    // Initialse 'threw' field to false
+    LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), C.getExceptionParamType());
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
+
+    // Assign address to __exception pointer
     LValue Addr = MakeAddrLValue(Arg.getAllocatedAddress(), C.getExceptionParamType());
     EmitStoreThroughLValue(RValue::get(Obj.getAllocatedAddress().getPointer()), Addr);
     CXXABIExceptDecl = VarArg;

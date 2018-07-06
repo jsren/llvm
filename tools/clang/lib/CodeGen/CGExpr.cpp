@@ -4688,6 +4688,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   if (FD && getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain()) {
     // Push exception object pointer.
     LoadExceptParam(Args);
+    Callee.hasExceptParam = true;
   }
   EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), E->arguments(),
                E->getDirectCallee(), /*ParamsToSkip*/ 0, Order);

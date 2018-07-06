@@ -117,6 +117,8 @@ public:
       assert(functionPtr->getType()->getPointerElementType()->isFunctionTy());
     }
 
+    bool hasExceptParam{};
+
     static CGCallee forBuiltin(unsigned builtinID,
                                const FunctionDecl *builtinDecl) {
       CGCallee result(SpecialKind::Builtin);

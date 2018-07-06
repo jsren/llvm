@@ -346,7 +346,7 @@ class ASTContext : public RefCountedBase<ASTContext> {
   // The type for the C++ __exception_t type.
   public:
   TypeDecl *ExceptObjType = nullptr;
-  FieldDecl *ExceptMbrSuccess = nullptr;
+  FieldDecl *ExceptMbrThrew = nullptr;
   FieldDecl *ExceptMbrType = nullptr;
   FieldDecl *ExceptMbrDtor = nullptr;
   private:

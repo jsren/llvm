@@ -1,7 +1,7 @@
 struct __exception_t
 {
     void* type;
-    bool success;
+    bool threw;
     void(*dtor)(void*);
 };
 

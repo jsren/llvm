@@ -14568,8 +14568,8 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
     for (FieldDecl* field : RD->fields())
     {
       auto name = field->getName().str();
-      if (name == "success") {
-        C.ExceptMbrSuccess = field;
+      if (name == "threw") {
+        C.ExceptMbrThrew = field;
       }
       else if (name == "type") {
         C.ExceptMbrType = field;
@@ -14578,7 +14578,7 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
         C.ExceptMbrDtor = field;
       }
     }
-    assert(C.ExceptMbrSuccess && C.ExceptMbrType && C.ExceptMbrDtor &&
+    assert(C.ExceptMbrThrew && C.ExceptMbrType && C.ExceptMbrDtor &&
             "__exception_t missing required field.");
   }
 }
