@@ -1519,7 +1519,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     else {
       CXXDestructorDecl *D = R->getDestructor();
       llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(D, StructorType::Complete);
-      EmitStoreThroughLValue(RValue::get(FPtr), LV3);
+      llvm::Value *Ptr = Builder.CreateBitCast(FPtr, ConvertType(LV3.getType()));
+      EmitStoreThroughLValue(RValue::get(Ptr), LV3);
     }
     return RValue::getIgnored();
   }

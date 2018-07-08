@@ -1376,9 +1376,7 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
   // Emit implicit exception object if within a C function or main
-  CanQual<FunctionProtoType> FTP = GetFormalType(FD);
-  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (FD->isMain() || FD->isExternC()) {
     ASTContext& C = getContext();
     IdentifierInfo* IIObj = &C.Idents.get("__exception_obj");
     IdentifierInfo* IIArg = &C.Idents.get("__exception");
