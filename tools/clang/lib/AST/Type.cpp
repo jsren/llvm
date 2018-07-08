@@ -2935,6 +2935,7 @@ CanThrowResult FunctionProtoType::canThrow() const {
   case EST_None:
   case EST_MSAny:
   case EST_NoexceptFalse:
+  case EST_Throws:
     return CT_Can;
 
   case EST_Dynamic:

@@ -3479,6 +3479,8 @@ static bool isCanonicalExceptionSpecification(
     const FunctionProtoType::ExceptionSpecInfo &ESI, bool NoexceptInType) {
   if (ESI.Type == EST_None)
     return true;
+  if (ESI.Type == EST_Throws)
+    return true;
   if (!NoexceptInType)
     return false;
 
@@ -3582,6 +3584,11 @@ QualType ASTContext::getFunctionTypeInternal(
         LLVM_FALLTHROUGH;
       case EST_None: case EST_MSAny: case EST_NoexceptFalse:
         CanonicalEPI.ExceptionSpec.Type = EST_None;
+        break;
+
+        // This should be unnecessary, but I'll add it just in case
+      case EST_Throws:
+        CanonicalEPI.ExceptionSpec.Type = EST_Throws;
         break;
 
         // A dynamic exception specification is almost always "not noexcept",

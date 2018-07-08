@@ -76,8 +76,8 @@ static CanQualType GetThisType(ASTContext &Context, const CXXRecordDecl *RD) {
 }
 
 /// Returns the canonical formal type of the given C++ method.
-static CanQual<FunctionProtoType> GetFormalType(const CXXMethodDecl *MD) {
-  return MD->getType()->getCanonicalTypeUnqualified()
+static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *FD) {
+  return FD->getType()->getCanonicalTypeUnqualified()
            .getAs<FunctionProtoType>();
 }
 
@@ -188,7 +188,9 @@ CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionProtoType> FTP,
                                       const FunctionDecl *FD) {
   SmallVector<CanQualType, 16> argTypes;
 
-  if (Context.getLangOpts().CPlusPlus && (!FD || !(FD->isExternC() || FD->isMain()))) {
+  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws && (!FD || !FD->isMain()))
+  {
     // Add the '__exception' pointer.
     auto T = Context.getExceptionParamType().getCanonicalType();
     argTypes.push_back(CanQualType::CreateUnsafe(T));
@@ -257,8 +259,12 @@ CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
     argTypes.push_back(Context.VoidPtrTy);
 
   // Add the '__exception' pointer.
-  auto T = Context.getExceptionParamType().getCanonicalType();
-  argTypes.push_back(CanQualType::CreateUnsafe(T));
+  if (FTP && FTP->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws)
+  {
+    auto T = Context.getExceptionParamType().getCanonicalType();
+    argTypes.push_back(CanQualType::CreateUnsafe(T));
+  }
 
   return ::arrangeLLVMFunctionInfo(
       *this, true, argTypes,
@@ -314,9 +320,15 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
   SmallVector<FunctionProtoType::ExtParameterInfo, 16> paramInfos;
   argTypes.push_back(GetThisType(Context, MD->getParent()));
 
-  // Add the '__exception' pointer.
-  auto T = Context.getExceptionParamType().getCanonicalType();
-  argTypes.push_back(CanQualType::CreateUnsafe(T));
+  CanQual<FunctionProtoType> FTP = GetFormalType(MD);
+
+  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws)
+  {
+    // Add the '__exception' pointer.
+    auto T = Context.getExceptionParamType().getCanonicalType();
+    argTypes.push_back(CanQualType::CreateUnsafe(T));
+  }
 
   bool PassParams = true;
 
@@ -333,7 +345,6 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
     GD = GlobalDecl(DD, toCXXDtorType(Type));
   }
 
-  CanQual<FunctionProtoType> FTP = GetFormalType(MD);
 
   // Add the formal parameters.
   if (PassParams)

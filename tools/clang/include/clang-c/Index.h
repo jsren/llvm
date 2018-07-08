@@ -222,7 +222,11 @@ enum CXCursor_ExceptionSpecificationKind {
   /**
    * The exception specification has not been parsed yet.
    */
-  CXCursor_ExceptionSpecificationKind_Unparsed
+  CXCursor_ExceptionSpecificationKind_Unparsed,
+  /**
+   * The cursor has exception specification throws
+   */
+  CXCursor_ExceptionSpecificationKind_Throws
 };
 
 /**

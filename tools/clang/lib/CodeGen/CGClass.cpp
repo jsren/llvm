@@ -2009,7 +2009,12 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   Args.add(RValue::get(This.getPointer()), D->getThisType(getContext()));
 
   // Push exception object pointer.
-  LoadExceptParam(Args);
+  const FunctionProtoType *FPT = D->getType()->castAs<FunctionProtoType>();
+
+  if (FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+    LoadExceptParam(Args);
+  }
 
   // If this is a trivial constructor, emit a memcpy now before we lose
   // the alignment information on the argument.
@@ -2026,7 +2031,7 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   }
 
   // Add the rest of the user-supplied arguments.
-  const FunctionProtoType *FPT = D->getType()->castAs<FunctionProtoType>();
+  
   EvaluationOrder Order = E->isListInitialization()
                               ? EvaluationOrder::ForceLeftToRight
                               : EvaluationOrder::Default;
@@ -2271,7 +2276,10 @@ CodeGenFunction::EmitSynthesizedCXXCopyCtorCall(const CXXConstructorDecl *D,
   Args.add(RValue::get(This.getPointer()), D->getThisType(getContext()));
 
   // Push exception object pointer.
-  LoadExceptParam(Args);
+  if (FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+    LoadExceptParam(Args);
+  }
 
   // Push the src ptr.
   QualType QT = *(FPT->param_type_begin());

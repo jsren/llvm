@@ -56,9 +56,12 @@ commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
   }
 
   // Push the exception obj
-  CGF.LoadExceptParam(Args);
-
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
+  if (FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+    CGF.LoadExceptParam(Args);
+  }
+
   RequiredArgs required = RequiredArgs::forPrototypePlus(FPT, Args.size(), MD);
   unsigned PrefixSize = Args.size() - 1;
 
@@ -488,7 +491,11 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   Args.add(RValue::get(ThisPtrForCall), ThisType);
 
   // Push exception object pointer.
-  LoadExceptParam(Args);
+  if (FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+    LoadExceptParam(Args);
+  }
+
 
   RequiredArgs required =
       RequiredArgs::forPrototypePlus(FPT, 1, /*FD=*/nullptr);

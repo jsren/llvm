@@ -369,6 +369,7 @@ CXX11_KEYWORD(noexcept              , 0)
 CXX11_KEYWORD(nullptr               , 0)
 CXX11_KEYWORD(static_assert         , 0)
 CXX11_KEYWORD(thread_local          , 0)
+CXX11_KEYWORD(throws                , 0)
 
 // C++2a / concepts TS keywords
 CONCEPTS_KEYWORD(concept)

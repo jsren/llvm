@@ -1006,6 +1006,7 @@ Parser::isExpressionOrTypeSpecifierSimple(tok::TokenKind Kind) {
   case tok::kw_typeid:
   case tok::kw_alignof:
   case tok::kw_noexcept:
+  case tok::kw_throws:
   case tok::kw_nullptr:
   case tok::kw__Alignof:
   case tok::kw___null:
@@ -1722,7 +1723,7 @@ bool Parser::isCXXFunctionDeclarator(bool *IsAmbiguous) {
     else {
       const Token &Next = NextToken();
       if (Next.isOneOf(tok::amp, tok::ampamp, tok::kw_const, tok::kw_volatile,
-                       tok::kw_throw, tok::kw_noexcept, tok::l_square,
+                       tok::kw_throw, tok::kw_noexcept, tok::kw_throws, tok::l_square,
                        tok::l_brace, tok::kw_try, tok::equal, tok::arrow) ||
           isCXX11VirtSpecifier(Next))
         // The next token cannot appear after a constructor-style initializer,
@@ -1915,6 +1916,9 @@ Parser::TPResult Parser::TryParseFunctionDeclarator() {
     ConsumeParen();
     if (!SkipUntil(tok::r_paren, StopAtSemi))
       return TPResult::Error;
+  }
+  if (Tok.is(tok::kw_throws)) {
+    ConsumeToken();
   }
   if (Tok.is(tok::kw_noexcept)) {
     ConsumeToken();

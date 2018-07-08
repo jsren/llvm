@@ -1478,8 +1478,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     const char* CName = Name.c_str();
 
     IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
-    auto& Cxt = CGM.getContext();
-    auto T = Cxt.CharTy;
+    auto& C = CGM.getContext();
+    auto T = C.CharTy;
 
     auto curDeclCtx = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
     
@@ -1507,6 +1507,20 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     assert(Decl->getLanguageLinkage() == CLanguageLinkage);
 
+    // Get address of destructor for type
+    CXXRecordDecl *R = E->getArg(0)->getType().getTypePtr()->getAsCXXRecordDecl();
+    LValue LV3 = EmitLValueForField(BaseLV, getContext().ExceptMbrDtor);
+    // Set to null if no destructor
+    if (R == nullptr || !R->hasNonTrivialDestructor()) {
+      llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
+      auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
+      EmitStoreThroughLValue(RValue::get(CP), LV3);
+    }
+    else {
+      CXXDestructorDecl *D = R->getDestructor();
+      llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(D, StructorType::Complete);
+      EmitStoreThroughLValue(RValue::get(FPtr), LV3);
+    }
     return RValue::getIgnored();
   }
   case Builtin::BI__builtin_empty_return:

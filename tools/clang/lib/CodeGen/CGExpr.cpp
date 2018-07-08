@@ -47,6 +47,12 @@ using namespace CodeGen;
 //                        Miscellaneous Helper Methods
 //===--------------------------------------------------------------------===//
 
+/// Returns the canonical formal type of the given function
+static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *FD) {
+  return FD->getType()->getCanonicalTypeUnqualified()
+           .getAs<FunctionProtoType>();
+}
+
 llvm::Value *CodeGenFunction::EmitCastToVoidPtr(llvm::Value *value) {
   unsigned addressSpace =
       cast<llvm::PointerType>(value->getType())->getAddressSpace();
@@ -4685,7 +4691,9 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     }
   }
 
-  if (FD && getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain()) {
+  CanQual<FunctionProtoType> FTP = GetFormalType(FD);
+  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
     // Push exception object pointer.
     LoadExceptParam(Args);
     Callee.hasExceptParam = true;

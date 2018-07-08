@@ -3524,6 +3524,13 @@ Parser::tryParseExceptionSpecification(bool Delayed,
   ExceptionSpecificationType Result = EST_None;
   ExceptionSpecTokens = nullptr;
   
+  // Handle throws specification
+  if (Tok.is(tok::kw_throws)) {
+    SpecificationRange = SourceRange(ConsumeToken());
+    NoexceptExpr = nullptr;
+    return EST_Throws;
+  }
+
   // Handle delayed parsing of exception-specifications.
   if (Delayed) {
     if (Tok.isNot(tok::kw_throw) && Tok.isNot(tok::kw_noexcept))

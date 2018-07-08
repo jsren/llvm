@@ -5932,6 +5932,8 @@ mergeExceptionSpecs(Sema &S, FunctionProtoType::ExceptionSpecInfo ESI1,
   if (EST2 == EST_None) return ESI2;
   if (EST1 == EST_MSAny) return ESI1;
   if (EST2 == EST_MSAny) return ESI2;
+  if (EST1 == EST_Throws) return ESI1;
+  if (EST2 == EST_Throws) return ESI2;
   if (EST1 == EST_NoexceptFalse) return ESI1;
   if (EST2 == EST_NoexceptFalse) return ESI2;
 
@@ -5961,6 +5963,7 @@ mergeExceptionSpecs(Sema &S, FunctionProtoType::ExceptionSpecInfo ESI1,
   case EST_DynamicNone:
   case EST_MSAny:
   case EST_BasicNoexcept:
+  case EST_Throws:
   case EST_DependentNoexcept:
   case EST_NoexceptFalse:
   case EST_NoexceptTrue:

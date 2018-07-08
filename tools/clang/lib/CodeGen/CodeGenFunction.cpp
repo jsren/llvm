@@ -41,6 +41,12 @@
 using namespace clang;
 using namespace CodeGen;
 
+/// Returns the canonical formal type of the given C++ method.
+static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *MD) {
+  return MD->getType()->getCanonicalTypeUnqualified()
+           .getAs<FunctionProtoType>();
+}
+
 /// shouldEmitLifetimeMarkers - Decide whether we need emit the life-time
 /// markers.
 static bool shouldEmitLifetimeMarkers(const CodeGenOptions &CGOpts,
@@ -1277,7 +1283,9 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
     CGM.getCXXABI().buildThisParam(*this, Args);
   }
 
-  if (getLangOpts().CPlusPlus && !FD->isExternC() && !FD->isMain()) {
+  const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
+  if (FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
     CGM.getCXXABI().buildExceptionParam(*this, Args);
   }
 
@@ -1368,7 +1376,9 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
   // Emit implicit exception object if within a C function or main
-  if (getLangOpts().CPlusPlus && (FD->isExternC() || FD->isMain())) {
+  CanQual<FunctionProtoType> FTP = GetFormalType(FD);
+  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
     ASTContext& C = getContext();
     IdentifierInfo* IIObj = &C.Idents.get("__exception_obj");
     IdentifierInfo* IIArg = &C.Idents.get("__exception");
