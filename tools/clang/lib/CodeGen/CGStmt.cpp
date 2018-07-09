@@ -1063,7 +1063,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     // that the cleanup code should not destroy the variable.
     if (llvm::Value *NRVOFlag = NRVOFlags[S.getNRVOCandidate()])
       Builder.CreateFlagStore(Builder.getTrue(), NRVOFlag);
-  } else if (!ReturnValue.isValid() || (RV && RV->getType()->isVoidType())) {
+  } else if (!ReturnValue.isValid() || (RV && !RV->isEmpty() && RV->getType()->isVoidType())) {
     // Make sure not to return anything, but evaluate the expression
     // for side effects.
     if (RV)

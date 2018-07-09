@@ -4521,7 +4521,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
-    // Assign false to success
+    // Check 'threw' value after callee
     LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
     RValue RV = EmitLoadOfLValue(LV, SourceLocation());
     llvm::Value *Val = RV.getScalarVal();
@@ -4531,10 +4531,21 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
     Builder.CreateCondBr(Val, TrueBlock, FalseBlock, nullptr, nullptr);
     EmitBlock(TrueBlock);
-    // TODO: Emit goto
-    Builder.CreateBr(TrueBlock);
-    //EmitBranchThroughCleanup();
-    EmitBlock(FalseBlock, true);
+
+    // Emit goto catch handler if one present
+    if (catchHandlerStack.size() > 0) {
+      EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
+    }
+    // Otherwise return empty
+    else {
+      Expr *e = new (getContext()) CallExpr (getContext(),
+        Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
+      e->setEmpty(true);
+      ReturnStmt *RT = new (getContext()) ReturnStmt(
+        SourceLocation(), e, nullptr);
+      EmitReturnStmt(*RT);
+    }
+    EmitBlock(FalseBlock);
   }
 
   return Ret;

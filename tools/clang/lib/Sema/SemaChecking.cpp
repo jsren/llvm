@@ -1269,6 +1269,15 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     break;
   }
+  case Builtin::BI__builtin_catch: {
+    // TODO: Probably a better place to put this
+    //std::string Name = "__catch_handler" + std::to_string(nextCatchHandlerId++);
+    //IdentifierInfo* II = &Context.Idents.get(Name.c_str());
+    //LabelDecl *LD = LookupOrCreateLabel(II, TheCall->getLocStart());
+    //Context.CatchHandlers[]
+    //LD->dump();
+    break;
+  }
   case Builtin::BI__exception_code:
   case Builtin::BI_exception_code:
     if (SemaBuiltinSEHScopeCheck(*this, TheCall, Scope::SEHExceptScope,

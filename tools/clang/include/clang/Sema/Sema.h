@@ -280,6 +280,8 @@ class Sema {
   ///Source of additional semantic information.
   ExternalSemaSource *ExternalSource;
 
+  uint32_t nextCatchHandlerId = 0;
+
   ///Whether Sema has generated a multiplexer and has to delete it.
   bool isMultiplexExternalSource;
 

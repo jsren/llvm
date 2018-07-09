@@ -1397,6 +1397,10 @@ public:
   };
 
 private:
+  llvm::SmallVector<LabelDecl *, 2> catchHandlerStack{};
+  llvm::SmallVector<LabelDecl *, 2> catchHandlerEndStack{};
+  uint32_t nextCatchHandlerId = 1;
+
   /// CXXThisDecl - When generating code for a C++ member function,
   /// this will hold the implicit 'this' declaration.
   ImplicitParamDecl *CXXABIThisDecl;

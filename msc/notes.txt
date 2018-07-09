@@ -29,6 +29,7 @@ ParseExprCXX.cpp:2472 <- Parser::ParseUnqualifiedId
 
 Parser.cpp:1050 <- Parser::ParseFunctionDefinition (function body)
 ParseStmt.cpp:1957 <- ParseFunctionStatementBody
+ParseStmt.cpp:944 <- ParseCompoundStatementBody
 
 Actions.ActOnParamDeclarator <- adds param decl. to scope
 
@@ -48,6 +49,8 @@ ItaniumCXXABI.cpp:1475 <- ItaniumCXXABI::EmitDestructorCall
 
 CGStmt.cpp:605 <- CodeGenFunction::EmitIfStmt
 CGStmt.cpp:639 <- createBasicBlock("if.then")
+
+ParseAST.cpp:156 <- Consumer->HandleTopLevelDecl
 
 
 1. Use 'EmitAutoVarAlloca' to create execption object in function prelude?

@@ -5288,6 +5288,7 @@ QualType ASTContext::getSignatureParameterType(QualType T) const {
 }
 
 QualType ASTContext::getExceptionObjectType() const {
+  assert(ExceptObjType && "Missing __exception_t definition.");
   return QualType(ExceptObjType->getTypeForDecl(), 0);
 }
 QualType ASTContext::getExceptionParamType() const {

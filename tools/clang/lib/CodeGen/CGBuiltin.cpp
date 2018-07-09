@@ -1456,6 +1456,42 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
   switch (BuiltinID) {
   default: break;
+  case Builtin::BI__builtin_try: {
+    // Create label decl
+    std::string Name = "__catch_handler" + std::to_string(nextCatchHandlerId++);
+    IdentifierInfo* II = &getContext().Idents.get(Name.c_str());
+    FunctionDecl *FD = const_cast<FunctionDecl*>(cast<FunctionDecl>(CurGD.getDecl()));
+    LabelDecl *LD = LabelDecl::Create(getContext(), const_cast<DeclContext*>(
+      FD->getDeclContext()), FD->getLocation(), II);
+    catchHandlerStack.push_back(LD);
+    getJumpDestForLabel(LD);
+    return RValue::getIgnored();
+  }
+  case Builtin::BI__builtin_catch: {
+    assert(catchHandlerStack.size() > 0 && "Missing companion __builtin_try");
+
+    // Emit jump around catch
+    std::string Name = catchHandlerStack.back()->getName().str() + "_end";
+    IdentifierInfo* II = &getContext().Idents.get(Name.c_str());
+    FunctionDecl *FD = const_cast<FunctionDecl*>(cast<FunctionDecl>(CurGD.getDecl()));
+    LabelDecl *LD = LabelDecl::Create(getContext(), const_cast<DeclContext*>(
+      FD->getDeclContext()), FD->getLocation(), II);
+    catchHandlerEndStack.push_back(LD);
+    EmitBranchThroughCleanup(getJumpDestForLabel(LD));
+
+    // Consume and emit label decl
+    EmitLabel(catchHandlerStack.back());
+    catchHandlerStack.pop_back();
+    return RValue::getIgnored();
+  }
+  case Builtin::BI__builtin_catch_end: {
+    assert(catchHandlerEndStack.size() > 0 && "Missing companion __builtin_catch");
+
+    // Consume and emit label decl
+    EmitLabel(catchHandlerEndStack.back());
+    catchHandlerEndStack.pop_back();
+    return RValue::getIgnored();
+  }
   case Builtin::BI__builtin_throw: {
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;

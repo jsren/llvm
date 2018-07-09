@@ -835,6 +835,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
 
   const Decl *D = GD.getDecl();
 
+  catchHandlerStack.clear();
+  catchHandlerEndStack.clear();
+
   DidCallStackSave = false;
   CurCodeDecl = D;
   if (const auto *FD = dyn_cast_or_null<FunctionDecl>(D))
@@ -1474,6 +1477,15 @@ bool CodeGenFunction::ContainsLabel(const Stmt *S, bool IgnoreCaseStmts) {
   // can't jump to one from outside their declared region.
   if (isa<LabelStmt>(S))
     return true;
+
+  if (isa<CallExpr>(S)) {
+    const CallExpr *CE = cast<CallExpr>(S);
+    const FunctionDecl *FD = CE->getDirectCallee();
+    if (FD && FD->getBuiltinID() == Builtin::BI__builtin_catch)
+      return true;
+    if (FD && FD->getBuiltinID() == Builtin::BI__builtin_catch_end)
+      return true;
+  }
 
   // If this is a case/default statement, and we haven't seen a switch, we have
   // to emit the code.

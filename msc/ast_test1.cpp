@@ -32,9 +32,8 @@ struct Payload
 
 Payload test() throws
 {
-    //__exception.success = false;
-    __builtin_throw(Payload());
-    return __builtin_empty_return();
+    //__builtin_throw(Payload());
+    //return __builtin_empty_return();
     auto P = Payload();
     P.i = 1;
     return P;
@@ -45,12 +44,15 @@ int main()
     __exception_t __dummy;
 
     //try
+    __builtin_try();
     {
         Payload p = test();
-        //if (!__exception.success) goto handler;
+        // TODO: use p
     }
-handler:
+    __builtin_catch();
     {
-        
+        return 1;
     }
+    __builtin_catch_end();
+    return 0;
 }

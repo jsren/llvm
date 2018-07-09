@@ -225,6 +225,11 @@ class ASTContext : public RefCountedBase<ASTContext> {
   using TypeInfoMap = llvm::DenseMap<const Type *, struct TypeInfo>;
   mutable TypeInfoMap MemoizedTypeInfo;
 
+public:
+  llvm::DenseMap<const FunctionDecl*, llvm::SmallVector<LabelDecl *, 2>>
+      CatchHandlers{};
+
+private:
   /// A cache mapping from CXXRecordDecls to key functions.
   llvm::DenseMap<const CXXRecordDecl*, LazyDeclPtr> KeyFunctions;
 
