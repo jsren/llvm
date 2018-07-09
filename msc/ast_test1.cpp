@@ -32,11 +32,10 @@ struct Payload
 
 Payload test() throws
 {
-    //__builtin_throw(Payload());
-    //return __builtin_empty_return();
-    auto P = Payload();
-    P.i = 1;
-    return P;
+    __builtin_throw(Payload());
+    //auto P = Payload();
+    //P.i = 1;
+    //return P;
 }
 
 int main()
@@ -46,11 +45,21 @@ int main()
     //try
     __builtin_try();
     {
-        Payload p = test();
-        // TODO: use p
+        __builtin_try();
+        {
+            Payload p = test();
+            // TODO: use p
+        }
+        __builtin_catch();
+        {
+            __builtin_throw(0);
+            return 2;
+        }
+        __builtin_catch_end();
     }
     __builtin_catch();
     {
+        __builtin_throw(0);
         return 1;
     }
     __builtin_catch_end();

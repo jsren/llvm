@@ -1517,9 +1517,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     auto& C = CGM.getContext();
     auto T = C.CharTy;
 
-    auto curDeclCtx = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
+    FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
     
-    DeclContext* TUnitDC = curDeclCtx;
+    DeclContext* TUnitDC = curDecl;
     while (!TUnitDC->isFileContext()) {
       TUnitDC = TUnitDC->getLexicalParent();
     }
@@ -1557,6 +1557,30 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(D, StructorType::Complete);
       llvm::Value *Ptr = Builder.CreateBitCast(FPtr, ConvertType(LV3.getType()));
       EmitStoreThroughLValue(RValue::get(Ptr), LV3);
+    }
+
+    const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
+
+    // Emit goto catch handler if one present
+    if (catchHandlerStack.size() > 0) {
+      EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
+      EmitBlock(createBasicBlock("throw.cont"));
+    }
+    // Return empty if throws
+    else if (FPT && FPT->getExceptionSpecType()
+      == ExceptionSpecificationType::EST_Throws)
+    {
+      Expr *e = new (getContext()) CallExpr (getContext(),
+        Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
+      e->setEmpty(true);
+      ReturnStmt *RT = new (getContext()) ReturnStmt(
+        SourceLocation(), e, nullptr);
+      EmitReturnStmt(*RT);
+      EmitBlock(createBasicBlock("throw.cont"));
+    }
+    // If non-throws function, just call std::terminate
+    else {
+      Builder.CreateCall(CGM.getTerminateFn());
     }
     return RValue::getIgnored();
   }
