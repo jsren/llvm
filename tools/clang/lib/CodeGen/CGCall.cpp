@@ -4512,7 +4512,18 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   }
 
   // Emit check for exception failure
-  if (Callee.hasExceptParam)
+  bool throws = Callee.hasExceptParam;
+  if (!throws)
+  {
+    auto *FD = cast<FunctionDecl>(Callee.getAbstractInfo().getCalleeDecl());
+    if (FD) {
+      auto *FPT = cast<FunctionProtoType>(FD->getType());
+      if (FPT) {
+        throws |= (FPT->getExceptionSpecType() == EST_Throws);
+      }
+    }
+  }
+  if (throws)
   {
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;

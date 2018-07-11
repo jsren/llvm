@@ -1,0 +1,2 @@
+#!/bin/bash
+bin/clang++ -c -target arm-none-eabi -isystem /usr/lib/arm-none-eabi/newlib/armv7-m -isystem /usr/lib/arm-none-eabi/newlib -isystem /usr/include/newlib/c++/6.3.1 -isystem /usr/include/newlib/c++/6.3.1/arm-none-eabi -isystem /usr/include/newlib

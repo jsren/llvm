@@ -1,5 +1,5 @@
 #include "stdexcept.hpp"
-//#include <iostream>
+#include <iostream>
 
 extern "C" {
     [[gnu::weak]]
@@ -8,15 +8,28 @@ extern "C" {
         char __typeid_for_Payload = 0;
 }
 
+struct Death {
+    Death() = default;
+    Death(int i) throws {
+        throw 3;
+    }
+};
+
 struct Payload
 {
     int i = 42;
+    Death d;
 
-    Payload(int o) throws : i(o) { /*throw 3;*/ }
+    Payload(int o) throws /*try*/ : i(o), d(o) {
+        std::cout << "Not Caught!\n";
+    }
+    /*catch(...) {
+        std::cout << "Caught!\n";
+    }*/
     Payload(const Payload& o) throws : i(o.i) { };
     Payload& operator =(const Payload&) = delete;
     ~Payload() {
-        //std::cout << "Payload contained " << i << '\n';
+        std::cout << "Payload contained " << i << '\n';
     }
 };
 
@@ -24,10 +37,14 @@ Payload test() throws;
 
 int main()
 {
-    try {
+    Payload i(99);
+
+    std::cout << "Tok Pek" << '\n';
+
+    /*try {
         try {
             Payload i(99);
-            int j = [&]() throws {
+            int j = [=]() throws {
                 throw 1;
                 return i.i;
             }();
@@ -39,18 +56,17 @@ int main()
         }
         catch(...) {
             throw 0;
-            //return 0;
         }
     }
     catch(Payload p) {
-        return 0;
+        throw 0;
     }
     catch(int i) {
         return 5;
     }
     catch(...) {
-        throw 13;
-    }
+        throw 0;
+    }*/
     return 0;
 }
 

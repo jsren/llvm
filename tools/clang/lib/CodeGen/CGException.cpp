@@ -551,12 +551,14 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
 }
 
 void CodeGenFunction::EmitCXXTryStmt(const CXXTryStmt &S) {
-  getLangOpts().ZCExceptions ? EnterCXXZCTryStmt(S) : EnterCXXTryStmt(S);
+  EnterCXXTryStmt(S);
   EmitStmt(S.getTryBlock());
-  getLangOpts().ZCExceptions ? ExitCXXZCTryStmt(S) : ExitCXXTryStmt(S);
+  ExitCXXTryStmt(S);
 }
 
 void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
+  if (getLangOpts().ZCExceptions) return EnterCXXZCTryStmt(S, IsFnTryBlock);
+
   unsigned NumHandlers = S.getNumHandlers();
   EHCatchScope *CatchScope = EHStack.pushCatch(NumHandlers);
 
@@ -742,6 +744,10 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     bool IsCatchAll = (T == QualType());
     if (!IsCatchAll)
     {
+      Qualifiers CaughtTypeQuals;
+      QualType CaughtType = CGM.getContext().getUnqualifiedArrayType(
+          C->getCaughtType().getNonReferenceType(), CaughtTypeQuals);
+
       llvm::Value *Val;
       {
         LValueBaseInfo BaseInfo;
@@ -752,7 +758,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
         LValue TypeLV = EmitLValueForField(BaseLV, getContext().ExceptMbrType);
         RValue TypeRV = EmitLoadOfLValue(TypeLV, SourceLocation());
-        VarDecl *Decl = VarDeclForTypeID(T);
+        VarDecl *Decl = VarDeclForTypeID(CaughtType);
 
         DeclRefExpr *DeclRef = DeclRefExpr::Create(
           CGM.getContext(), NestedNameSpecifierLoc{}, SourceLocation{},
@@ -1378,6 +1384,8 @@ void CodeGenFunction::popCatchScope() {
 }
 
 void CodeGenFunction::ExitCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
+  if (getLangOpts().ZCExceptions) return ExitCXXZCTryStmt(S, IsFnTryBlock);
+
   unsigned NumHandlers = S.getNumHandlers();
   EHCatchScope &CatchScope = cast<EHCatchScope>(*EHStack.begin());
   assert(CatchScope.getNumHandlers() == NumHandlers);
