@@ -31,6 +31,12 @@
 using namespace clang;
 using namespace CodeGen;
 
+/// Returns the canonical formal type of the given function
+static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *FD) {
+  return FD->getType()->getCanonicalTypeUnqualified()
+           .getAs<FunctionProtoType>();
+}
+
 /// Return the best known alignment for an unknown pointer to a
 /// particular class.
 CharUnits CodeGenModule::getClassPointerAlignment(const CXXRecordDecl *RD) {
@@ -2125,7 +2131,12 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   const CGFunctionInfo &Info = CGM.getTypes().arrangeCXXConstructorCall(
       Args, D, Type, ExtraArgs.Prefix, ExtraArgs.Suffix, PassPrototypeArgs);
   CGCallee Callee = CGCallee::forDirect(CalleePtr, D);
-  Callee.hasExceptParam = true;
+
+  CanQual<FunctionProtoType> FTP = GetFormalType(cast<FunctionDecl>(D));
+  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+    Callee.hasExceptParam = true;
+  }
   EmitCall(Info, Callee, ReturnValueSlot(), Args);
 
   // Generate vtable assumptions if we're constructing a complete object

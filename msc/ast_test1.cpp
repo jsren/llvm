@@ -1,4 +1,5 @@
 #include "stdexcept.hpp"
+#include <iostream>
 
 extern "C" {
     char __typeid_for_int = 0;
@@ -12,6 +13,9 @@ struct Payload
     Payload(int o) throws : i(o) { /*throw 3;*/ }
     Payload(const Payload& o) throws : i(o.i) { };
     Payload& operator =(const Payload&) = delete;
+    ~Payload() {
+        std::cout << "Payload contained " << i << '\n';
+    }
 };
 
 Payload test() throws
@@ -19,7 +23,7 @@ Payload test() throws
     if (true) {
         throw Payload(52);
     }
-    else return Payload(1);
+    else return Payload(53);
 }
 
 
@@ -27,6 +31,7 @@ int main()
 {
     try {
         try {
+            Payload i(2);
             Payload p = test();
         }
         catch (Payload p) {
