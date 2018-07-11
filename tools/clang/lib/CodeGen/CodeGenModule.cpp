@@ -1121,6 +1121,8 @@ static bool hasUnwindExceptions(const LangOptions &LangOpts) {
   // If exceptions are completely disabled, obviously this is false.
   if (!LangOpts.Exceptions) return false;
 
+  if (LangOpts.ZCExceptions) return false;
+
   // If C++ exceptions are enabled, this is true.
   if (LangOpts.CXXExceptions) return true;
 

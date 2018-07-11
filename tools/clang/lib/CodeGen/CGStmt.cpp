@@ -1066,7 +1066,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
   } else if (!ReturnValue.isValid() || (RV && !RV->isEmpty() && RV->getType()->isVoidType())) {
     // Make sure not to return anything, but evaluate the expression
     // for side effects.
-    if (RV)
+    if (RV && !RV->isEmpty())
       EmitAnyExpr(RV);
   } else if (!RV || RV->isEmpty()) {
     // Do nothing (return value is left uninitialized)

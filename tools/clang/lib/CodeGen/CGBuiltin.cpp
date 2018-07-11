@@ -1456,6 +1456,17 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
   switch (BuiltinID) {
   default: break;
+  case Builtin::BI__builtin_get_exception: {
+    LValueBaseInfo BaseInfo;
+    TBAAAccessInfo TBAAInfo;
+    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+
+    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+
+    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+    return RValue::get(BaseLV.getPointer());
+  }
   case Builtin::BI__builtin_try: {
     // Create label decl
     std::string Name = "__catch_handler" + std::to_string(nextCatchHandlerId++);
@@ -1482,6 +1493,19 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     // Consume and emit label decl
     EmitLabel(catchHandlerStack.back());
     catchHandlerStack.pop_back();
+
+    // Set 'threw' to false
+    LValueBaseInfo BaseInfo;
+    TBAAAccessInfo TBAAInfo;
+    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+
+    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+  
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
+
     return RValue::getIgnored();
   }
   case Builtin::BI__builtin_catch_end: {
@@ -1506,42 +1530,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     EmitStoreThroughLValue(RValue::get(Builder.getTrue()), LV);
 
     // Get name of type-id to reference
-    std::string Name = QualType::getAsString(E->getArg(0)->getType().split(),
-      getContext().getPrintingPolicy());
-
-    std::replace(Name.begin(), Name.end(), ' ', '_');
-    Name = "__typeid_for_" + Name;
-    const char* CName = Name.c_str();
-
-    IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
-    auto& C = CGM.getContext();
-    auto T = C.CharTy;
-
-    FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
-    
-    DeclContext* TUnitDC = curDecl;
-    while (!TUnitDC->isFileContext()) {
-      TUnitDC = TUnitDC->getLexicalParent();
-    }
-    
-    LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
-      CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
-      CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
-      true);
-
-    VarDecl *Decl = VarDecl::Create(
-        CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
-        CurGD.getDecl()->getLocation(), II, T, nullptr, SC_Extern);
-
+    VarDecl *TIDDecl = VarDeclForTypeID(E->getArg(0)->getType());
     DeclRefExpr *DeclRef = DeclRefExpr::Create(CGM.getContext(), NestedNameSpecifierLoc{},
-        SourceLocation{}, Decl, false, SourceLocation{}, T, ExprValueKind::VK_LValue);
+        SourceLocation{}, TIDDecl, false, SourceLocation{}, TIDDecl->getType(), ExprValueKind::VK_LValue);
 
     // Assign type-id to type
     LValue LV1 = EmitDeclRefLValue(DeclRef);
     LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptMbrType);
     EmitStoreThroughLValue(RValue::get(LV1.getPointer()), LV2);
-
-    assert(Decl->getLanguageLinkage() == CLanguageLinkage);
 
     // Get address of destructor for type
     CXXRecordDecl *R = E->getArg(0)->getType().getTypePtr()->getAsCXXRecordDecl();
@@ -1559,6 +1555,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       EmitStoreThroughLValue(RValue::get(Ptr), LV3);
     }
 
+    FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
     const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
 
     // Emit goto catch handler if one present

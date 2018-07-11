@@ -2331,6 +2331,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   if (Args.hasArg(OPT_fno_threadsafe_statics))
     Opts.ThreadsafeStatics = 0;
   Opts.Exceptions = Args.hasArg(OPT_fexceptions);
+  Opts.ZCExceptions = Args.hasArg(OPT_fzcexceptions);
   Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
   Opts.CXXExceptions = Args.hasArg(OPT_fcxx_exceptions);
 

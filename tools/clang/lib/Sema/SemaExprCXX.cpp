@@ -701,6 +701,7 @@ ExprResult Sema::BuildCXXThrow(SourceLocation OpLoc, Expr *Ex,
                                bool IsThrownVarInScope) {
   // Don't report an error if 'throw' is used in system headers.
   if (!getLangOpts().CXXExceptions &&
+      !getLangOpts().ZCExceptions &&
       !getSourceManager().isInSystemHeader(OpLoc) &&
       (!getLangOpts().OpenMPIsDevice ||
        !getLangOpts().OpenMPHostCXXExceptions ||

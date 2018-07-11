@@ -427,8 +427,10 @@ void CodeGenFunction::EmitCXXThrowExpr(const CXXThrowExpr *E,
       const Stmt *ThrowStmt = E->getSubExpr();
       const ObjCAtThrowStmt S(E->getExprLoc(), const_cast<Stmt *>(ThrowStmt));
       CGM.getObjCRuntime().EmitThrowStmt(*this, S, false);
-    } else {
+    } else if (!CGM.getLangOpts().ZCExceptions) {
       CGM.getCXXABI().emitThrow(*this, E);
+    } else {
+      EmitZCThrow(E);
     }
   } else {
     CGM.getCXXABI().emitRethrow(*this, /*isNoReturn=*/true);
@@ -549,9 +551,10 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
 }
 
 void CodeGenFunction::EmitCXXTryStmt(const CXXTryStmt &S) {
+  //getLangOpts().ZCExceptions ? EnterCXXZCTryStmt(S) : EnterCXXTryStmt(S);
   EnterCXXTryStmt(S);
   EmitStmt(S.getTryBlock());
-  ExitCXXTryStmt(S);
+  getLangOpts().ZCExceptions ? ExitCXXZCTryStmt(S) : ExitCXXTryStmt(S);
 }
 
 void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
@@ -562,6 +565,11 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     const CXXCatchStmt *C = S.getHandler(I);
 
     llvm::BasicBlock *Handler = createBasicBlock("catch");
+    if (I == 0) {
+      JumpDest JD(Handler, EHStack.stable_begin(), NextCleanupDestIndex++);
+      ResolveBranchFixups(Handler);
+      catchHandlerBlockStack.push_back(JD);
+    }
     if (C->getExceptionDecl()) {
       // FIXME: Dropping the reference type on the type into makes it
       // impossible to correctly implement catch-by-reference
@@ -585,6 +593,209 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       CatchScope->setHandler(I, CGM.getCXXABI().getCatchAllTypeInfo(), Handler);
     }
   }
+}
+
+void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
+  LValueBaseInfo BaseInfo;
+  TBAAAccessInfo TBAAInfo;
+  Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+
+  auto ObjType = E->getSubExpr() ? E->getSubExpr()->getType() : QualType();
+
+  auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+  Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+  LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+
+  // Assign true to threw
+  LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+  EmitStoreThroughLValue(RValue::get(Builder.getTrue()), LV);
+
+  // Get name of type-id to reference
+  VarDecl *TIDDecl = VarDeclForTypeID(ObjType);
+  DeclRefExpr *DeclRef = DeclRefExpr::Create(CGM.getContext(), NestedNameSpecifierLoc{},
+      SourceLocation{}, TIDDecl, false, SourceLocation{}, TIDDecl->getType(), ExprValueKind::VK_LValue);
+
+  // Assign type-id to type
+  LValue LV1 = EmitDeclRefLValue(DeclRef);
+  LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptMbrType);
+  EmitStoreThroughLValue(RValue::get(LV1.getPointer()), LV2);
+
+  // Get address of destructor for type
+  CXXRecordDecl *R = ObjType.getTypePtr()->getAsCXXRecordDecl();
+  LValue LV3 = EmitLValueForField(BaseLV, getContext().ExceptMbrDtor);
+  // Set to null if no destructor
+  if (R == nullptr || !R->hasNonTrivialDestructor()) {
+    llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
+    auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
+    EmitStoreThroughLValue(RValue::get(CP), LV3);
+  }
+  else {
+    CXXDestructorDecl *D = R->getDestructor();
+    llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(D, StructorType::Complete);
+    llvm::Value *Ptr = Builder.CreateBitCast(FPtr, ConvertType(LV3.getType()));
+    EmitStoreThroughLValue(RValue::get(Ptr), LV3);
+  }
+
+  // EmitAnyExprToExn
+  EmitAnyExpr(E->getSubExpr());
+
+  FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
+  const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
+
+  // Jump to first handler if one in scopepora
+  if (catchHandlerBlockStack.size() != 0) {
+    EmitBranchThroughCleanup(catchHandlerBlockStack.back());
+  }
+  // Return empty if function throws
+  else if (FPT && FPT->getExceptionSpecType()
+      == ExceptionSpecificationType::EST_Throws) {
+    Expr *e = new (getContext()) CallExpr (getContext(),
+      Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
+    e->setEmpty(true);
+    ReturnStmt *RT = new (getContext()) ReturnStmt(
+      SourceLocation(), e, nullptr);
+    EmitReturnStmt(*RT);
+  }
+  // If non-throws function, just call std::terminate
+  else {
+    Builder.CreateCall(CGM.getTerminateFn());
+    Builder.CreateUnreachable();
+    Builder.ClearInsertionPoint();
+  }
+}
+
+void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
+  
+}
+
+void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
+  unsigned NumHandlers = S.getNumHandlers();
+
+  llvm::BasicBlock *ContBB = createBasicBlock("try.cont");
+
+  // Emit jump around catch
+  if (HaveInsertPoint())
+    Builder.CreateBr(ContBB);
+  
+  EHCatchScope &CatchScope = cast<EHCatchScope>(*EHStack.begin());
+  assert(CatchScope.getNumHandlers() == NumHandlers);
+
+  // Copy the handler blocks off before we pop the EH stack.  Emitting
+  // the handlers might scribble on this memory.
+  SmallVector<EHCatchScope::Handler, 8> Handlers(
+      CatchScope.begin(), CatchScope.begin() + NumHandlers);
+
+  // Pop catch handler block
+  assert(catchHandlerBlockStack.back().getBlock() == Handlers[0].Block);
+  catchHandlerBlockStack.pop_back();
+
+  EHStack.popCatch();
+
+  for (unsigned I = 0; I != NumHandlers; ++I) {
+    const CXXCatchStmt *C = S.getHandler(I);
+    EHCatchScope::Handler& Handler = Handlers[I];
+    llvm::BasicBlock *NextBlock = (I != (NumHandlers-1) ? Handlers[I+1].Block : nullptr);
+
+    // Emit block
+    RunCleanupsScope CatchScope(*this);
+    // TODO: Emit catch variable here
+    EmitBlock(Handler.Block);
+
+    // Emit jump to next block if filter fails and if not catch-all
+    QualType T = C->getCaughtType();
+    bool IsCatchAll = (T == QualType());
+    if (!IsCatchAll)
+    {
+      llvm::Value *Val;
+      {
+        LValueBaseInfo BaseInfo;
+        TBAAAccessInfo TBAAInfo;
+        Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+        auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+        Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+        LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+        LValue TypeLV = EmitLValueForField(BaseLV, getContext().ExceptMbrType);
+        RValue TypeRV = EmitLoadOfLValue(TypeLV, SourceLocation());
+        VarDecl *Decl = VarDeclForTypeID(T);
+
+        DeclRefExpr *DeclRef = DeclRefExpr::Create(
+          CGM.getContext(), NestedNameSpecifierLoc{}, SourceLocation{},
+          Decl, false, SourceLocation{}, Decl->getType(), ExprValueKind::VK_LValue);
+
+        LValue TIDLV = EmitDeclRefLValue(DeclRef);
+        Val = Builder.CreateICmp(
+          llvm::CmpInst::ICMP_NE, TypeRV.getScalarVal(),
+          TIDLV.getPointer(), "cmp");
+      }
+      llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+      llvm::BasicBlock *ContBlock = createBasicBlock("if.ccont");
+      Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
+      EmitBlock(TrueBlock);
+
+      // Jump to next catch handler if one present
+      if (NextBlock != nullptr) {
+          Builder.CreateBr(NextBlock);
+      }
+      // Otherwise return empty
+      else {
+        Expr *e = new (getContext()) CallExpr (getContext(),
+          Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
+        e->setEmpty(true);
+        ReturnStmt *RT = new (getContext()) ReturnStmt(
+          SourceLocation(), e, nullptr);
+        EmitReturnStmt(*RT);
+      }
+      EmitBlock(ContBlock);
+    }
+
+    // Set threw to false
+    {
+      LValueBaseInfo BaseInfo;
+      TBAAAccessInfo TBAAInfo;
+      Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+      auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+      Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+      LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+      LValue ThrewLV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+      EmitStoreThroughLValue(RValue::get(Builder.getFalse()), ThrewLV);
+    }
+
+    EmitStmt(C->getHandlerBlock());
+    CatchScope.ForceCleanup();
+
+    // If catch-all, emit dtor call
+    if (IsCatchAll)
+    {
+      /*llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
+      auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
+      LValueBaseInfo BaseInfo;
+      TBAAAccessInfo TBAAInfo;
+      Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+      auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+      Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+      LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+      LValue DtorLV = EmitLValueForField(BaseLV, getContext().ExceptMbrDtor);
+      RValue DtorRV = EmitLoadOfLValue(DtorLV, SourceLocation());
+      llvm::Value *Dtor = DtorRV.getScalarVal();
+      llvm::Value *Val = Builder.CreateICmp(
+        llvm::CmpInst::ICMP_NE, Dtor, CP, "cmp");
+
+      llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+      llvm::BasicBlock *ContBlock = createBasicBlock("if.cont");
+
+      Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
+      EmitBlock(TrueBlock);
+
+      //ArrayRef<llvm::Value *> Args; llvm::makeArrayRef
+      //Builder.CreateCall(DtorRV, Args, "call.dtor");
+      EmitBlock(ContBlock);*/
+    }
+    // Jump to end
+    if (HaveInsertPoint())
+      Builder.CreateBr(ContBB);
+  }
+  // Emit continuing block
+  EmitBlock(ContBB);
 }
 
 llvm::BasicBlock *

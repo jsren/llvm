@@ -1463,6 +1463,37 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     TryMarkNoThrow(CurFn);
 }
 
+VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
+  std::string Name = QualType::getAsString(T.split(),
+    getContext().getPrintingPolicy());
+
+  std::replace(Name.begin(), Name.end(), ' ', '_');
+  Name = "__typeid_for_" + Name;
+  const char* CName = Name.c_str();
+
+  IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
+  auto CT = CGM.getContext().CharTy;
+  
+  // Get file context
+  DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
+  while (!TUnitDC->isFileContext()) {
+    TUnitDC = TUnitDC->getLexicalParent();
+  }
+  // Set C linkage
+  LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+    CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
+    CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
+    true);
+
+  // Create vardecl
+  VarDecl *Decl = VarDecl::Create(
+      CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
+      CurGD.getDecl()->getLocation(), II, CT, nullptr, SC_Extern);
+
+  assert(Decl->getLanguageLinkage() == CLanguageLinkage);
+  return Decl;
+}
+
 /// ContainsLabel - Return true if the statement contains a label in it.  If
 /// this statement is not executed normally, it not containing a label means
 /// that we can just remove the code.

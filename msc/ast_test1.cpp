@@ -1,11 +1,4 @@
-
-extern "C" {
-    struct __exception_t {
-        void* type;
-        bool threw;
-        void(*dtor)(void*, __exception_t*);
-    };
-}
+#include "stdexcept.hpp"
 
 extern "C" {
     char __typeid_for_int = 0;
@@ -14,54 +7,108 @@ extern "C" {
 
 struct Payload
 {
-    int i = 0x42;
+    int i = 42;
 
-    Payload() throws// = delete; {
-    {
-        //*(volatile int*)(0xC0FFEEBA) = 0xBE;
-    }
-    Payload(const Payload& o) throws {
-        i = o.i;
-    };
+    Payload(int o) throws : i(o) { /*throw 3;*/ }
+    Payload(const Payload& o) throws : i(o.i) { };
     Payload& operator =(const Payload&) = delete;
-
-    ~Payload() throws {
-        //*(volatile int*)(0xC0FFEEBA) = 0xBE;
-    }
 };
 
 Payload test() throws
 {
-    __builtin_throw(Payload());
-    //auto P = Payload();
-    //P.i = 1;
-    //return P;
+    if (true) {
+        throw Payload(52);
+    }
+    else return Payload(1);
+}
+
+
+int main()
+{
+    try {
+        try {
+            Payload p = test();
+        }
+        catch (Payload p) {
+            return 7;
+        }
+        catch(...) {
+            throw 0;
+        }
+    }
+    catch(Payload p) {
+        throw 0;
+    }
+    catch(int i) {
+        return 5;
+    }
+    catch(...) {
+        throw 0;
+    }
+    return 0;
+}
+
+/*int other() throws
+{
+    try
+    {
+        //throw Payload(2);
+        //throw 0;
+        Payload(2);
+    }
+    catch (Payload p)
+    {
+        return 1;
+    }
+    catch (...)
+    {
+        return 2;
+    }
+    return 0;
 }
 
 int main()
 {
-    __exception_t __dummy;
+    try { 
+        other();
+    }
+    catch (int i) {
+        return 4;
+    }
+    return 0;
+}*/
 
-    //try
-    __builtin_try();
-    {
-        __builtin_try();
-        {
+/*int main()
+{
+    TRY {
+        TRY {
             Payload p = test();
-            // TODO: use p
         }
-        __builtin_catch();
-        {
-            __builtin_throw(0);
-            return 2;
-        }
-        __builtin_catch_end();
+        CATCH({
+            THROW(0);
+        })
     }
-    __builtin_catch();
+    CATCH(
+    catch_payload:
     {
-        __builtin_throw(0);
-        return 1;
+        if (std::exception_info().get_typeid() != &__typeid_for_Payload) goto catch_int;
+        THROW(0);
+        goto catch_end;
     }
-    __builtin_catch_end();
+    catch_int:
+    {
+        if (std::exception_info().get_typeid() != &__typeid_for_int) goto catch_all;
+        return 5;
+        goto catch_end;
+    }
+    catch_all:
+    {
+        THROW(0);
+        goto catch_end;
+    }
+    catch_end:
+    __builtin_get_exception();
+    )
     return 0;
 }
+*/

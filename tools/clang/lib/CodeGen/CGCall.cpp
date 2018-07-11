@@ -4533,8 +4533,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     EmitBlock(TrueBlock);
 
     // Emit goto catch handler if one present
-    if (catchHandlerStack.size() > 0) {
-      EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
+    if (catchHandlerBlockStack.size() > 0) {
+      EmitBranchThroughCleanup(catchHandlerBlockStack.back());
+      //EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
     }
     // Otherwise return empty
     else {

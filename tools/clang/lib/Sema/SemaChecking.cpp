@@ -1264,6 +1264,16 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (SemaBuiltinCallReturnEmpty(*this, TheCall))
       return ExprError();
     break;
+  case Builtin::BI__builtin_get_exception: {
+    QualType QT = Context.getExceptionObjectType();
+    QT.addConst();
+    QT = Context.getPointerType(QT);
+
+    TheCall->setType(QT);
+    TheCall->setValueKind(ExprValueKind::VK_RValue);
+    TheCall->setObjectKind(ExprObjectKind::OK_Ordinary);
+    break;
+  }
   case Builtin::BI__builtin_throw: {
     if (checkArgCount(*this, TheCall, 1))
       return ExprError();

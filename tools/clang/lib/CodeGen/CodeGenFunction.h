@@ -547,6 +547,8 @@ public:
     new (Buffer + sizeof(Header)) T(A...);
   }
 
+  VarDecl *VarDeclForTypeID(QualType T);
+
   /// Set up the last cleaup that was pushed as a conditional
   /// full-expression cleanup.
   void initFullExprCleanup();
@@ -1398,6 +1400,7 @@ public:
 
 private:
   llvm::SmallVector<LabelDecl *, 2> catchHandlerStack{};
+  llvm::SmallVector<JumpDest, 2> catchHandlerBlockStack{};
   llvm::SmallVector<LabelDecl *, 2> catchHandlerEndStack{};
   uint32_t nextCatchHandlerId = 1;
 
@@ -2749,12 +2752,15 @@ public:
 
   void EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock = false);
   void ExitCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock = false);
+  void EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock = false);
+  void ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock = false);
 
   void EmitCXXTryStmt(const CXXTryStmt &S);
   void EmitSEHTryStmt(const SEHTryStmt &S);
   void EmitSEHLeaveStmt(const SEHLeaveStmt &S);
   void EnterSEHTryStmt(const SEHTryStmt &S);
   void ExitSEHTryStmt(const SEHTryStmt &S);
+  void EmitZCThrow(const CXXThrowExpr *E);
 
   void startOutlinedSEHHelper(CodeGenFunction &ParentCGF, bool IsFilter,
                               const Stmt *OutlinedStmt);

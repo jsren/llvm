@@ -3942,6 +3942,7 @@ StmtResult Sema::ActOnCXXTryBlock(SourceLocation TryLoc, Stmt *TryBlock,
                                   ArrayRef<Stmt *> Handlers) {
   // Don't report an error if 'try' is used in system headers.
   if (!getLangOpts().CXXExceptions &&
+      !getLangOpts().ZCExceptions &&
       !getSourceManager().isInSystemHeader(TryLoc) &&
       (!getLangOpts().OpenMPIsDevice ||
        !getLangOpts().OpenMPHostCXXExceptions ||
