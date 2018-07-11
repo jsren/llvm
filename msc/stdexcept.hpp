@@ -1,3 +1,5 @@
+#pragma once
+
 struct __exception_t {
     void* type;
     bool threw;
@@ -6,7 +8,7 @@ struct __exception_t {
 static __exception_t __type_dummy;
 
 extern "C" {
-    unsigned char __exception_obj_buffer[64];
+    static unsigned char __exception_obj_buffer[64];
 }
 
 #define TRY __builtin_try();

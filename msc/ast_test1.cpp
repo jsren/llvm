@@ -1,9 +1,11 @@
 #include "stdexcept.hpp"
-#include <iostream>
+//#include <iostream>
 
 extern "C" {
-    char __typeid_for_int = 0;
-    char __typeid_for_Payload = 0;
+    [[gnu::weak]]
+        char __typeid_for_int = 0;
+    [[gnu::weak]]
+        char __typeid_for_Payload = 0;
 }
 
 struct Payload
@@ -14,25 +16,23 @@ struct Payload
     Payload(const Payload& o) throws : i(o.i) { };
     Payload& operator =(const Payload&) = delete;
     ~Payload() {
-        std::cout << "Payload contained " << i << '\n';
+        //std::cout << "Payload contained " << i << '\n';
     }
 };
 
-Payload test() throws
-{
-    if (true) {
-        throw Payload(52);
-    }
-    else return Payload(53);
-}
-
+Payload test() throws;
 
 int main()
 {
     try {
         try {
-            Payload i(2);
-            Payload p = test();
+            Payload i(99);
+            int j = [=]() throws {
+                throw 1;
+                return i.i;
+            }();
+            return j;
+            //Payload p = test();
         }
         catch (Payload p) {
             return 7;

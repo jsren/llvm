@@ -1378,10 +1378,10 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
-  // Emit implicit exception object if within a C function or main
+  // Emit implicit exception state if within a C function or main
   if (FD->isMain() || FD->isExternC()) {
     ASTContext& C = getContext();
-    IdentifierInfo* IIObj = &C.Idents.get("__exception_obj");
+    IdentifierInfo* IIObj = &C.Idents.get("__exception_state");
     IdentifierInfo* IIArg = &C.Idents.get("__exception");
     auto VarObj = VarDecl::Create(C, const_cast<DeclContext*>(FD->getDeclContext()),
           Loc, Loc, IIObj, C.getExceptionObjectType(), nullptr, SC_Auto);

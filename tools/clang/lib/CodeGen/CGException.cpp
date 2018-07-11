@@ -551,13 +551,45 @@ void CodeGenFunction::EmitEndEHSpec(const Decl *D) {
 }
 
 void CodeGenFunction::EmitCXXTryStmt(const CXXTryStmt &S) {
-  //getLangOpts().ZCExceptions ? EnterCXXZCTryStmt(S) : EnterCXXTryStmt(S);
-  EnterCXXTryStmt(S);
+  getLangOpts().ZCExceptions ? EnterCXXZCTryStmt(S) : EnterCXXTryStmt(S);
   EmitStmt(S.getTryBlock());
   getLangOpts().ZCExceptions ? ExitCXXZCTryStmt(S) : ExitCXXTryStmt(S);
 }
 
 void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
+  unsigned NumHandlers = S.getNumHandlers();
+  EHCatchScope *CatchScope = EHStack.pushCatch(NumHandlers);
+
+  for (unsigned I = 0; I != NumHandlers; ++I) {
+    const CXXCatchStmt *C = S.getHandler(I);
+
+    llvm::BasicBlock *Handler = createBasicBlock("catch");
+    if (C->getExceptionDecl()) {
+      // FIXME: Dropping the reference type on the type into makes it
+      // impossible to correctly implement catch-by-reference
+      // semantics for pointers.  Unfortunately, this is what all
+      // existing compilers do, and it's not clear that the standard
+      // personality routine is capable of doing this right.  See C++ DR 388:
+      //   http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_active.html#388
+      Qualifiers CaughtTypeQuals;
+      QualType CaughtType = CGM.getContext().getUnqualifiedArrayType(
+          C->getCaughtType().getNonReferenceType(), CaughtTypeQuals);
+
+      CatchTypeInfo TypeInfo{nullptr, 0};
+      if (CaughtType->isObjCObjectPointerType())
+        TypeInfo.RTTI = CGM.getObjCRuntime().GetEHType(CaughtType);
+      else
+        TypeInfo = CGM.getCXXABI().getAddrOfCXXCatchHandlerType(
+            CaughtType, C->getCaughtType());
+      CatchScope->setHandler(I, TypeInfo, Handler);
+    } else {
+      // No exception decl indicates '...', a catch-all.
+      CatchScope->setHandler(I, CGM.getCXXABI().getCatchAllTypeInfo(), Handler);
+    }
+  }
+}
+
+void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   unsigned NumHandlers = S.getNumHandlers();
   EHCatchScope *CatchScope = EHStack.pushCatch(NumHandlers);
 
@@ -596,6 +628,22 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 }
 
 void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
+  FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
+  FunctionDecl *codeDecl = dyn_cast_or_null<FunctionDecl>(
+    const_cast<Decl*>(CurCodeDecl));
+  if (codeDecl != nullptr)
+    curDecl = codeDecl;
+  const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
+
+  // First check if within noexcept context. If so, just terminate.
+  if (catchHandlerBlockStack.size() == 0 && (!FPT || FPT->getExceptionSpecType()
+      != ExceptionSpecificationType::EST_Throws)) {
+    Builder.CreateCall(CGM.getTerminateFn());
+    Builder.CreateUnreachable();
+    Builder.ClearInsertionPoint();
+    return;
+  }
+
   LValueBaseInfo BaseInfo;
   TBAAAccessInfo TBAAInfo;
   Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
@@ -639,9 +687,6 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
   // EmitAnyExprToExn
   EmitAnyExpr(E->getSubExpr());
 
-  FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
-  const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
-
   // Jump to first handler if one in scopepora
   if (catchHandlerBlockStack.size() != 0) {
     EmitBranchThroughCleanup(catchHandlerBlockStack.back());
@@ -656,16 +701,7 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
       SourceLocation(), e, nullptr);
     EmitReturnStmt(*RT);
   }
-  // If non-throws function, just call std::terminate
-  else {
-    Builder.CreateCall(CGM.getTerminateFn());
-    Builder.CreateUnreachable();
-    Builder.ClearInsertionPoint();
-  }
-}
-
-void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
-  
+  else llvm_unreachable("Unreachable.");
 }
 
 void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
