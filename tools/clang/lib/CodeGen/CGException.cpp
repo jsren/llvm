@@ -790,7 +790,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       EmitBlock(ContBlock);
     }
 
-    // Set threw to false
+    // Set threw to false (unless function-try where we propagate)
+    if (!IsFnTryBlock)
     {
       LValueBaseInfo BaseInfo;
       TBAAAccessInfo TBAAInfo;

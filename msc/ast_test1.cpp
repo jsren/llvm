@@ -1,5 +1,5 @@
 #include "stdexcept.hpp"
-//#include <iostream>
+#include <iostream>
 
 extern "C" {
     [[gnu::weak]]
@@ -12,17 +12,17 @@ struct Payload
 {
     int i = 42;
 
-    Payload(int o) throws : i(o) { /*throw 3;*/ }
+    Payload(int o) throws : i(o) { throw 3; }
     Payload(const Payload& o) throws : i(o.i) { };
     Payload& operator =(const Payload&) = delete;
     ~Payload() {
-        //std::cout << "Payload contained " << i << '\n';
+        std::cout << "Payload contained " << i << '\n';
     }
 };
 
 Payload test() throws;
 
-int main()
+/*int main()
 {
     try {
         try {
@@ -52,9 +52,9 @@ int main()
         throw 13;
     }
     return 0;
-}
+}*/
 
-/*int other() throws
+int other() throws
 {
     try
     {
@@ -66,15 +66,16 @@ int main()
     {
         return 1;
     }
-    catch (...)
+    /*catch (...)
     {
         return 2;
-    }
+    }*/
     return 0;
 }
 
 int main()
 {
+    throw 0;
     try { 
         other();
     }
@@ -82,7 +83,7 @@ int main()
         return 4;
     }
     return 0;
-}*/
+}
 
 /*int main()
 {

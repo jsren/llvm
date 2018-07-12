@@ -4543,10 +4543,28 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     Builder.CreateCondBr(Val, TrueBlock, FalseBlock, nullptr, nullptr);
     EmitBlock(TrueBlock);
 
+    bool curFuncThrows = false;
+    {
+      FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
+      FunctionDecl *codeDecl = dyn_cast_or_null<FunctionDecl>(
+        const_cast<Decl*>(CurCodeDecl));
+      if (codeDecl != nullptr)
+        curDecl = codeDecl;
+      const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
+
+      curFuncThrows = FPT && FPT->getExceptionSpecType()
+          == ExceptionSpecificationType::EST_Throws;
+    }
+
     // Emit goto catch handler if one present
     if (catchHandlerBlockStack.size() > 0) {
       EmitBranchThroughCleanup(catchHandlerBlockStack.back());
       //EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
+    }
+    // Check if within noexcept context. If so, just terminate.
+    else if (!curFuncThrows) {
+      Builder.CreateCall(CGM.getTerminateFn());
+      Builder.CreateUnreachable();
     }
     // Otherwise return empty
     else {

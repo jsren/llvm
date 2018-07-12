@@ -20,12 +20,12 @@ struct Payload
     int i = 42;
     Death d;
 
-    Payload(int o) throws /*try*/ : i(o), d(o) {
+    Payload(int o) throws try : i(o), d(o) {
         std::cout << "Not Caught!\n";
     }
-    /*catch(...) {
+    catch(...) {
         std::cout << "Caught!\n";
-    }*/
+    }
     Payload(const Payload& o) throws : i(o.i) { };
     Payload& operator =(const Payload&) = delete;
     ~Payload() {
@@ -37,9 +37,13 @@ Payload test() throws;
 
 int main()
 {
-    Payload i(99);
+    try {
+        Payload i(99);
+    }
+    catch (...) {
+        std::cout << "Tok Pek" << '\n';
+    }
 
-    std::cout << "Tok Pek" << '\n';
 
     /*try {
         try {
