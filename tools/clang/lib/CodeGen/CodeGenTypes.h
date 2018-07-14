@@ -260,7 +260,8 @@ public:
 
   /// Free functions are functions that are compatible with an ordinary
   /// C function pointer type.
-  const CGFunctionInfo &arrangeFunctionDeclaration(const FunctionDecl *FD);
+  const CGFunctionInfo &arrangeFunctionDeclaration(const FunctionDecl *FD, 
+                                                   bool forceThrows = false);
   const CGFunctionInfo &arrangeFreeFunctionCall(const CallArgList &Args,
                                                 const FunctionType *Ty,
                                                 bool ChainCall);
@@ -299,9 +300,11 @@ public:
                                                  const FunctionType *type);
 
   /// C++ methods have some special rules and also have implicit parameters.
-  const CGFunctionInfo &arrangeCXXMethodDeclaration(const CXXMethodDecl *MD);
+  const CGFunctionInfo &arrangeCXXMethodDeclaration(const CXXMethodDecl *MD,
+                                                    bool forceThrows = false);
   const CGFunctionInfo &arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
-                                                      StructorType Type);
+                                                      StructorType Type,
+                                                      bool forceThrows = false);
   const CGFunctionInfo &arrangeCXXConstructorCall(const CallArgList &Args,
                                                   const CXXConstructorDecl *D,
                                                   CXXCtorType CtorKind,
@@ -319,7 +322,8 @@ public:
                                                  CXXCtorType CT);
   const CGFunctionInfo &arrangeCXXMethodType(const CXXRecordDecl *RD,
                                              const FunctionProtoType *FTP,
-                                             const CXXMethodDecl *MD);
+                                             const CXXMethodDecl *MD,
+                                             bool forceThrows = false);
 
   /// "Arrange" the LLVM information for a call or type with the given
   /// signature.  This is largely an internal method; other clients

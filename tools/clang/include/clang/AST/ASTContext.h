@@ -351,9 +351,11 @@ private:
   // The type for the C++ __exception_t type.
   public:
   TypeDecl *ExceptObjType = nullptr;
-  FieldDecl *ExceptMbrThrew = nullptr;
+  FieldDecl *ExceptMbrSize = nullptr;
   FieldDecl *ExceptMbrType = nullptr;
+  FieldDecl *ExceptMbrCtor = nullptr;
   FieldDecl *ExceptMbrDtor = nullptr;
+  VarDecl *ExceptBufferDecl = nullptr;
   private:
 
   /// Type for the Block descriptor for Blocks CodeGen.

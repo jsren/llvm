@@ -41,6 +41,11 @@
 using namespace clang;
 using namespace CodeGen;
 
+static llvm::Constant *getSize(CodeGenFunction& CGF, uint64_t V) {
+  llvm::Type* T = CGF.ConvertType(CGF.getContext().getSizeType());
+  return llvm::ConstantInt::get(cast<llvm::IntegerType>(T), V);
+}
+
 /// Returns the canonical formal type of the given C++ method.
 static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *MD) {
   return MD->getType()->getCanonicalTypeUnqualified()
@@ -1273,7 +1278,8 @@ void CodeGenFunction::LoadExceptParam(CallArgList& Args) {
 }
 
 QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
-                                               FunctionArgList &Args) {
+                                               FunctionArgList &Args,
+                                               bool forceThrows) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
   QualType ResTy = FD->getReturnType();
 
@@ -1287,8 +1293,8 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
   }
 
   const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
-  if (FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if ((FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) || forceThrows) {
     CGM.getCXXABI().buildExceptionParam(*this, Args);
   }
 
@@ -1332,6 +1338,78 @@ shouldUseUndefinedBehaviorReturnOptimization(const FunctionDecl *FD,
       return !ClassDecl->hasTrivialDestructor();
   }
   return !T.isTriviallyCopyableType(Context);
+}
+
+void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
+                                             llvm::Function *Fn,
+                                             const CGFunctionInfo &FnInfo,
+                                             llvm::Constant *Callee,
+                                             size_t exceptionArg) {
+  const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
+  CurGD = GD;
+
+  FunctionArgList Args;
+  QualType ResTy = BuildFunctionArgList(GD, Args, true);
+
+  // Check if we should generate debug info for this function.
+  if (FD->hasAttr<NoDebugAttr>())
+    DebugInfo = nullptr; // disable debug info indefinitely for this function  
+
+  SourceRange BodyRange;
+  FD->getLocation();
+  CurEHLocation = BodyRange.getEnd();
+
+  // Use the location of the start of the function to determine where
+  // the function definition is located. By default use the location
+  // of the declaration as the location for the subprogram. A function
+  // may lack a declaration in the source code if it is created by code
+  // gen. (examples: _GLOBAL__I_a, __cxx_global_array_dtor, thunk).
+  SourceLocation Loc = FD->getLocation();
+
+  // Emit the standard function prologue.
+  StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
+
+  EnsureInsertPoint();
+
+  llvm::Value *Args2[Args.size() - 1];
+
+  for (size_t i = 0, j = 0; i < Args.size(); i++) {
+    if (i != exceptionArg) {
+      LValue LV = MakeAddrLValue(GetAddrOfLocalVar(Args[i]), Args[i]->getType());
+      Args2[j++] = EmitLoadOfLValue(LV, SourceLocation()).getScalarVal();
+    }
+  }
+
+  Builder.CreateCall(Callee, ArrayRef<llvm::Value*>(Args2, Args2 + Args.size()-1));
+
+  // C++11 [stmt.return]p2:
+  //   Flowing off the end of a function [...] results in undefined behavior in
+  //   a value-returning function.
+  // C11 6.9.1p12:
+  //   If the '}' that terminates a function is reached, and the value of the
+  //   function call is used by the caller, the behavior is undefined.
+  if (getLangOpts().CPlusPlus && !FD->hasImplicitReturnZero() && !SawAsmBlock &&
+      !FD->getReturnType()->isVoidType() && Builder.GetInsertBlock()) {
+    bool ShouldEmitUnreachable =
+        CGM.getCodeGenOpts().StrictReturn ||
+        shouldUseUndefinedBehaviorReturnOptimization(FD, getContext());
+    if (SanOpts.has(SanitizerKind::Return)) {
+      SanitizerScope SanScope(this);
+      llvm::Value *IsFalse = Builder.getFalse();
+      EmitCheck(std::make_pair(IsFalse, SanitizerKind::Return),
+                SanitizerHandler::MissingReturn,
+                EmitCheckSourceLocation(FD->getLocation()), None);
+    } else if (ShouldEmitUnreachable) {
+      if (CGM.getCodeGenOpts().OptimizationLevel == 0)
+        EmitTrapCall(llvm::Intrinsic::trap);
+    }
+    if (SanOpts.has(SanitizerKind::Return) || ShouldEmitUnreachable) {
+      Builder.CreateUnreachable();
+      Builder.ClearInsertionPoint();
+    }
+  }
+  // Emit the standard function epilogue.
+  FinishFunction(BodyRange.getEnd());
 }
 
 void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
@@ -1392,8 +1470,8 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
 
     // Initialse 'threw' field to false
     LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), C.getExceptionParamType());
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
-    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
+    EmitStoreThroughLValue(RValue::get(getSize(*this, 0)), LV);
 
     // Assign address to __exception pointer
     LValue Addr = MakeAddrLValue(Arg.getAllocatedAddress(), C.getExceptionParamType());

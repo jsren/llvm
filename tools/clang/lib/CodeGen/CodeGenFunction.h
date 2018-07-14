@@ -1684,7 +1684,14 @@ public:
 
   const BlockByrefInfo &getBlockByrefInfo(const VarDecl *var);
 
-  QualType BuildFunctionArgList(GlobalDecl GD, FunctionArgList &Args);
+  QualType BuildFunctionArgList(GlobalDecl GD, FunctionArgList &Args,
+    bool forceThrows = false);
+
+  void GenerateExceptionThunk(GlobalDecl GD,
+                              llvm::Function *Fn,
+                              const CGFunctionInfo &FnInfo,
+                              llvm::Constant *Callee,
+                              size_t exceptionArg);
 
   void GenerateCode(GlobalDecl GD, llvm::Function *Fn,
                     const CGFunctionInfo &FnInfo);

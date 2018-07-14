@@ -940,6 +940,9 @@ public:
   /// Emit code for a single top level declaration.
   void EmitTopLevelDecl(Decl *D);
 
+  // Emit exception thunk. If unnecessary, returns nullptr.
+  llvm::Constant *EmitExceptionThunk(GlobalDecl GD, llvm::Constant *Callee);
+
   /// Stored a deferred empty coverage mapping for an unused
   /// and thus uninstrumented top level declaration.
   void AddDeferredUnusedCoverageMapping(Decl *D);

@@ -2105,6 +2105,43 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
   }
 }
 
+llvm::Constant *CodeGenModule::EmitExceptionThunk(GlobalDecl GD, llvm::Constant *Callee)
+{
+  // This thunk will simply take (and ignore) an additional __exception parameter
+  // in order to provide a common call signature for throws and non-throws functions
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(
+    GD.getDecl())->getCanonicalDecl();
+
+  const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
+  const CXXConstructorDecl *CD = dyn_cast_or_null<CXXConstructorDecl>(FD);
+
+  if (!FPT || FPT->getExceptionSpecType()
+      != ExceptionSpecificationType::EST_Throws)
+  {
+    std::string Name = getMangledName(GD).str() + ".throws";
+
+    const CGFunctionInfo *FI;
+    if (CD)
+      FI = &Types.arrangeCXXStructorDeclaration(
+                     CD, getFromCtorType(GD.getCtorType()), /*ForceThrows=*/true);
+    else
+      FI = &Types.arrangeFunctionDeclaration(FD, /*ForceThrows=*/true);
+
+
+    llvm::Type *T = Types.GetFunctionType(*FI);
+    llvm::Constant *FP = GetOrCreateLLVMFunction(Name, T, GD, /*ForVTable=*/true,
+                            /*DontDefer=*/true, /*IsThunk=*/true);
+
+    auto *Fn = cast<llvm::Function>(FP);
+    Fn->setLinkage(llvm::GlobalValue::PrivateLinkage);
+    //setFunctionLinkage(GD, Fn);
+    // Assume exception is 2nd arg
+    CodeGenFunction(*this).GenerateExceptionThunk(GD, Fn, *FI, Callee, 1);
+    return FP;
+  }
+  else return nullptr;
+}
+
 // Check if T is a class type with a destructor that's not dllimport.
 static bool HasNonDllImportDtor(QualType T) {
   if (const auto *RT = T->getBaseElementTypeUnsafe()->getAs<RecordType>())

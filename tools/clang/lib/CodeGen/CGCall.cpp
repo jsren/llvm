@@ -41,6 +41,11 @@
 using namespace clang;
 using namespace CodeGen;
 
+static llvm::Constant *getSize(CodeGenFunction& CGF, uint64_t V) {
+  llvm::Type* T = CGF.ConvertType(CGF.getContext().getSizeType());
+  return llvm::ConstantInt::get(cast<llvm::IntegerType>(T), V);
+}
+
 /***/
 
 unsigned CodeGenTypes::ClangCallConvToLLVMCallConv(CallingConv CC) {
@@ -249,7 +254,8 @@ static CallingConv getCallingConventionForDecl(const Decl *D, bool IsWindows) {
 const CGFunctionInfo &
 CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
                                    const FunctionProtoType *FTP,
-                                   const CXXMethodDecl *MD) {
+                                   const CXXMethodDecl *MD,
+                                   bool forceThrows) {
   SmallVector<CanQualType, 16> argTypes;
 
   // Add the 'this' pointer.
@@ -259,8 +265,8 @@ CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
     argTypes.push_back(Context.VoidPtrTy);
 
   // Add the '__exception' pointer.
-  if (FTP && FTP->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws)
+  if ((FTP && FTP->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) || forceThrows)
   {
     auto T = Context.getExceptionParamType().getCanonicalType();
     argTypes.push_back(CanQualType::CreateUnsafe(T));
@@ -286,7 +292,7 @@ static void setCUDAKernelCallingConvention(CanQualType &FTy, CodeGenModule &CGM,
 /// member function must be an ordinary function, i.e. not a
 /// constructor or destructor.
 const CGFunctionInfo &
-CodeGenTypes::arrangeCXXMethodDeclaration(const CXXMethodDecl *MD) {
+CodeGenTypes::arrangeCXXMethodDeclaration(const CXXMethodDecl *MD, bool forceThrows) {
   assert(!isa<CXXConstructorDecl>(MD) && "wrong method for constructors!");
   assert(!isa<CXXDestructorDecl>(MD) && "wrong method for destructors!");
 
@@ -297,9 +303,10 @@ CodeGenTypes::arrangeCXXMethodDeclaration(const CXXMethodDecl *MD) {
   if (MD->isInstance()) {
     // The abstract case is perfectly fine.
     const CXXRecordDecl *ThisType = TheCXXABI.getThisArgumentTypeForMethod(MD);
-    return arrangeCXXMethodType(ThisType, prototype.getTypePtr(), MD);
+    return arrangeCXXMethodType(ThisType, prototype.getTypePtr(), MD, forceThrows);
   }
 
+  assert(!forceThrows && "Cannot force throws on static methods");
   return arrangeFreeFunctionType(prototype, MD);
 }
 
@@ -314,7 +321,8 @@ bool CodeGenTypes::inheritingCtorHasParams(
 
 const CGFunctionInfo &
 CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
-                                            StructorType Type) {
+                                            StructorType Type,
+                                            bool forceThrows) {
 
   SmallVector<CanQualType, 16> argTypes;
   SmallVector<FunctionProtoType::ExtParameterInfo, 16> paramInfos;
@@ -322,8 +330,8 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
 
   CanQual<FunctionProtoType> FTP = GetFormalType(MD);
 
-  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws)
+  if ((!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) || forceThrows)
   {
     // Add the '__exception' pointer.
     auto T = Context.getExceptionParamType().getCanonicalType();
@@ -453,11 +461,13 @@ CodeGenTypes::arrangeCXXConstructorCall(const CallArgList &args,
 /// Arrange the argument and result information for the declaration or
 /// definition of the given function.
 const CGFunctionInfo &
-CodeGenTypes::arrangeFunctionDeclaration(const FunctionDecl *FD) {
+CodeGenTypes::arrangeFunctionDeclaration(const FunctionDecl *FD,
+                                         bool forceThrows) {
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD))
     if (MD->isInstance())
-      return arrangeCXXMethodDeclaration(MD);
+      return arrangeCXXMethodDeclaration(MD, forceThrows);
 
+  assert(!forceThrows && "Can only force throws for member functions");
   CanQualType FTy = FD->getType()->getCanonicalTypeUnqualified();
 
   assert(isa<FunctionType>(FTy));
@@ -4533,9 +4543,10 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
     // Check 'threw' value after callee
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrThrew);
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
     RValue RV = EmitLoadOfLValue(LV, SourceLocation());
-    llvm::Value *Val = RV.getScalarVal();
+    llvm::Value *Val = Builder.CreateICmp(
+      llvm::CmpInst::ICMP_NE, RV.getScalarVal(), getSize(*this, 0), "cmp");
 
     llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
     llvm::BasicBlock *FalseBlock = createBasicBlock("if.end");

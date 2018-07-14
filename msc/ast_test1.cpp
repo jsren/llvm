@@ -12,11 +12,21 @@ struct Payload
 {
     int i = 42;
 
-    Payload(int o) throws : i(o) { throw 3; }
-    Payload(const Payload& o) throws : i(o.i) { };
+    Payload(int o) throws : i(o) {
+        std::cout << "Payload constructed\n";
+        //*((volatile int*)0x666) = 0xEE;
+        /*throw 3;*/ }
+    Payload(const Payload& o) : i(o.i) {
+        //*((volatile int*)0x777) = 0xC0;
+        std::cout << "Payload copy constructed with " << i << '\n';
+    };
+    Payload(Payload&& o) : i(o.i) {
+        std::cout << "Payload move constructed\n";
+    }
     Payload& operator =(const Payload&) = delete;
     ~Payload() {
-        std::cout << "Payload contained " << i << '\n';
+        //*((volatile int*)0x888) = 0xFF;
+        std::cout << "Dead Payload contained " << i << '\n';
     }
 };
 
@@ -58,13 +68,14 @@ int other() throws
 {
     try
     {
-        //throw Payload(2);
+        throw Payload(77);
         //throw 0;
-        Payload(2);
+        //Payload(2);
     }
     catch (Payload p)
     {
-        return 1;
+        //Payload pp = p;
+        return p.i;
     }
     /*catch (...)
     {
@@ -75,14 +86,15 @@ int other() throws
 
 int main()
 {
-    throw 0;
-    try { 
-        other();
+    //throw 0;
+    return other();
+    /*try { 
+        return other();
     }
     catch (int i) {
-        return 4;
+        return i;
     }
-    return 0;
+    return 0;*/
 }
 
 /*int main()

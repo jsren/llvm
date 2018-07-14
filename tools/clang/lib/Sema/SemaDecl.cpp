@@ -5202,6 +5202,11 @@ Decl *Sema::ActOnDeclarator(Scope *S, Declarator &D) {
   if (getLangOpts().OpenCL)
     setCurrentOpenCLExtensionForDecl(Dcl);
 
+  if (D.getName().getKind() == UnqualifiedIdKind::IK_Identifier) {
+    if (D.getName().Identifier->getName().str() == "__exception_obj_buffer") {
+      Context.ExceptBufferDecl = cast<VarDecl>(Dcl);
+    }
+  }
   return Dcl;
 }
 
@@ -14568,8 +14573,8 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
     for (FieldDecl* field : RD->fields())
     {
       auto name = field->getName().str();
-      if (name == "threw") {
-        C.ExceptMbrThrew = field;
+      if (name == "size") {
+        C.ExceptMbrSize = field;
       }
       else if (name == "type") {
         C.ExceptMbrType = field;
@@ -14577,8 +14582,11 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       else if (name == "dtor") {
         C.ExceptMbrDtor = field;
       }
+      else if (name == "ctor") {
+        C.ExceptMbrCtor = field;
+      }
     }
-    assert(C.ExceptMbrThrew && C.ExceptMbrType && C.ExceptMbrDtor &&
+    assert(C.ExceptMbrSize && C.ExceptMbrType && C.ExceptMbrDtor && C.ExceptMbrCtor &&
             "__exception_t missing required field.");
   }
 }

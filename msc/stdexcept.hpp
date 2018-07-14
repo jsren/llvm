@@ -1,15 +1,18 @@
 #pragma once
 
-struct __exception_t {
-    void* type;
-    bool threw;
-    void(*dtor)(void*);
-};
-static __exception_t __type_dummy;
-
 extern "C" {
     static unsigned char __exception_obj_buffer[64];
 }
+
+struct __exception_t {
+    void* type;
+    decltype(sizeof(int)) size;
+    // If the original ctor is not 'throws', we will emit and assign a thunk instead
+    // TODO: support VTT pointer
+    void(*ctor)(void*, __exception_t*, void*); 
+    void(*dtor)(void*);
+};
+static __exception_t __type_dummy;
 
 #define TRY __builtin_try();
 #define CATCH(x) __builtin_catch(); {x} __builtin_catch_end();

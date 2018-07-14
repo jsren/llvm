@@ -586,6 +586,53 @@ namespace {
       CGF.EmitCall(FnInfo, Callee, ReturnValueSlot(), Args);
     }
   };
+
+  struct CallCatchAllDtor final : EHScopeStack::Cleanup {
+    llvm::Constant *CleanupFn{};
+    const CGFunctionInfo &FnInfo;
+    const VarDecl &Var;
+    const VarDecl &ExceptObj;
+
+    CallCatchAllDtor(const CGFunctionInfo *Info,
+      const VarDecl *Var, const VarDecl *ExceptObj)
+      : FnInfo(*Info), Var(*Var), ExceptObj(*ExceptObj) {}
+
+    void Emit(CodeGenFunction &CGF, Flags flags) override {
+      /*DeclRefExpr ObjDR(const_cast<VarDecl*>(&Var), false,
+                      Var.getType(), VK_LValue, SourceLocation());
+      DeclRefExpr ExceptDR(const_cast<VarDecl*>(&ExceptObj), false,
+                      Var.getType(), VK_LValue, SourceLocation());
+      // Compute the address of the local variable, in case it's a byref
+      // or something.
+      llvm::Value *Addr = CGF.EmitDeclRefLValue(&ObjDR).getPointer();
+      LValue ExceptLV = CGF.EmitDeclRefLValue(&ExceptDR);
+
+      llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
+      auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
+      LValue DtorLV = EmitLValueForField(ExceptLV, getContext().ExceptMbrDtor);
+      RValue DtorRV = EmitLoadOfLValue(DtorLV, SourceLocation());
+      llvm::Value *Dtor = DtorRV.getScalarVal();
+      llvm::Value *Val = Builder.CreateICmp(
+        llvm::CmpInst::ICMP_NE, Dtor, CP, "cmp");
+
+      llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+      llvm::BasicBlock *ContBlock = createBasicBlock("if.cont");
+
+      Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
+      EmitBlock(TrueBlock);
+
+      CallArgList Args;
+      Args.add(RValue::get(Addr),
+               CGF.getContext().getPointerType(Var.getType()));
+
+      //ArrayRef<llvm::Value *> Args; llvm::makeArrayRef
+      Builder.CreateCall(Dtor, Args, "Call.Dtor");
+      EmitBlock(ContBlock);*/
+      //auto Callee = CGCallee::forDirect(CleanupFn);
+      //CGF.EmitCall(FnInfo, Callee, ReturnValueSlot(), Args);
+    }
+  };
+
 } // end anonymous namespace
 
 /// EmitAutoVarWithLifetime - Does the setup required for an automatic
