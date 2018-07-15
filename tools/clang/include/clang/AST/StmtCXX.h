@@ -66,6 +66,8 @@ class CXXTryStmt : public Stmt {
   SourceLocation TryLoc;
   unsigned NumHandlers;
 
+  mutable VarDecl *exceptionState;
+
   CXXTryStmt(SourceLocation tryLoc, Stmt *tryBlock, ArrayRef<Stmt*> handlers);
 
   CXXTryStmt(EmptyShell Empty, unsigned numHandlers)
@@ -98,6 +100,13 @@ public:
   }
   const CompoundStmt *getTryBlock() const {
     return cast<CompoundStmt>(getStmts()[0]);
+  }
+
+  VarDecl *getExceptionState() const {
+    return exceptionState;
+  }
+  void setExceptionState(VarDecl *Decl) const {
+    exceptionState = Decl;
   }
 
   unsigned getNumHandlers() const { return NumHandlers; }

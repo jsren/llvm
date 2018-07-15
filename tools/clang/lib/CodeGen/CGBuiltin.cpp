@@ -1459,9 +1459,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_get_exception: {
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
 
-    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
 
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
@@ -1497,9 +1497,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     // Set 'threw' to false
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
 
-    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
   
@@ -1519,9 +1519,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_throw: {
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
 
-    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
   

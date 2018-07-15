@@ -1412,7 +1412,15 @@ private:
   CharUnits CXXABIThisAlignment;
   CharUnits CXXThisAlignment;
 
-  VarDecl *CXXABIExceptDecl{};
+  llvm::SmallVector<VarDecl*, 2> CXXABIExceptDeclStack{};
+
+  VarDecl *curExceptDecl() const {
+    return CXXABIExceptDeclStack.back();
+  }
+
+  void MaybeCopyBackExceptionState();
+
+
   llvm::Value *CXXABIExceptValue{};
   llvm::Value *CXXExceptValue{};
   CharUnits CXXABIExceptAlignment{};

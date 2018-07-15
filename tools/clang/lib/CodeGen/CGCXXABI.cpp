@@ -135,7 +135,7 @@ void CGCXXABI::buildExceptionParam(CodeGenFunction &CGF, FunctionArgList &params
       II, T, ImplicitParamDecl::CXXExcept);
 
   params.push_back(Decl);
-  CGF.CXXABIExceptDecl = Decl;  
+  CGF.CXXABIExceptDeclStack.push_back(Decl);
 }
 
 void CGCXXABI::buildThisParam(CodeGenFunction &CGF, FunctionArgList &params) {

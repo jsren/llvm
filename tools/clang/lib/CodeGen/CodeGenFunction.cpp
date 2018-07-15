@@ -1252,26 +1252,26 @@ static void TryMarkNoThrow(llvm::Function *F) {
 llvm::Value *CodeGenFunction::LoadExceptParam() {
   // Push exception object pointer.
   llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+    GetAddrOfLocalVar(curExceptDecl()).getPointer();
 
   llvm::Value *Addr =
-    EmitLoadOfScalar(GetAddrOfLocalVar(CXXABIExceptDecl),
+    EmitLoadOfScalar(GetAddrOfLocalVar(curExceptDecl()),
                       /*Volatile=*/false,
                       getContext().getExceptionParamType(),
-                      CXXABIExceptDecl->getLocation());
+                      curExceptDecl()->getLocation());
   return Addr;
 }
 
 void CodeGenFunction::LoadExceptParam(CallArgList& Args) {
       // Push exception object pointer.
   llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(CXXABIExceptDecl).getPointer();
+    GetAddrOfLocalVar(curExceptDecl()).getPointer();
 
   llvm::Value *Addr =
-    EmitLoadOfScalar(GetAddrOfLocalVar(CXXABIExceptDecl),
+    EmitLoadOfScalar(GetAddrOfLocalVar(curExceptDecl()),
                       /*Volatile=*/false,
                       getContext().getExceptionParamType(),
-                      CXXABIExceptDecl->getLocation());
+                      curExceptDecl()->getLocation());
 
   Args.add(RValue::get(Addr),
     getContext().getExceptionParamType());
@@ -1476,7 +1476,8 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     // Assign address to __exception pointer
     LValue Addr = MakeAddrLValue(Arg.getAllocatedAddress(), C.getExceptionParamType());
     EmitStoreThroughLValue(RValue::get(Obj.getAllocatedAddress().getPointer()), Addr);
-    CXXABIExceptDecl = VarArg;
+
+    CXXABIExceptDeclStack.push_back(VarArg);
   }
 
   // Generate the body of the function.

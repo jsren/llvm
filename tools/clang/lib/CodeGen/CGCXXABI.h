@@ -54,7 +54,7 @@ protected:
     return CGF.CXXABIThisDecl;
   }
   VarDecl *getExceptDecl(CodeGenFunction &CGF) {
-    return CGF.CXXABIExceptDecl;
+    return CGF.curExceptDecl();
   }
   llvm::Value *getThisValue(CodeGenFunction &CGF) {
     return CGF.CXXABIThisValue;

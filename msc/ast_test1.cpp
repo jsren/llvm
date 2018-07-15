@@ -1,5 +1,5 @@
 #include "stdexcept.hpp"
-#include <iostream>
+#include <cstdio>
 
 extern "C" {
     [[gnu::weak]]
@@ -12,21 +12,28 @@ struct Payload
 {
     int i = 42;
 
-    Payload(int o) throws : i(o) {
-        std::cout << "Payload constructed\n";
+    Payload(int o) : i(o) {
+        std::printf("Payload constructed\n");
+        //std::cout << "Payload constructed\n";
         //*((volatile int*)0x666) = 0xEE;
-        /*throw 3;*/ }
+        /*throw 3;*/
+    }
     Payload(const Payload& o) : i(o.i) {
         //*((volatile int*)0x777) = 0xC0;
-        std::cout << "Payload copy constructed with " << i << '\n';
+        std::printf("Payload copy constructed\n");
+        //std::cout << "Payload copy constructed with " << i << '\n';
     };
-    Payload(Payload&& o) : i(o.i) {
-        std::cout << "Payload move constructed\n";
+    Payload(Payload&& o) throws : i(o.i) {
+        std::printf("Payload move constructed\n");
+        throw 54;
+        //*((volatile int*)0x777) = 0xC0;
+        //std::cout << "Payload move constructed\n";
     }
     Payload& operator =(const Payload&) = delete;
     ~Payload() {
         //*((volatile int*)0x888) = 0xFF;
-        std::cout << "Dead Payload contained " << i << '\n';
+        std::printf("Payload destroyed.\n");
+        //std::cout << "Dead Payload contained " << i << '\n';
     }
 };
 

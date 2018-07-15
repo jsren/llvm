@@ -597,6 +597,39 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 }
 
 void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
+
+
+  // Emit a local copy of the incoming exception state
+  // This serves two purposes: the first is to improve optimisation
+  // (in case an external function is called, which disables optimisation on the state fields)
+  // The second is to allow nested rethrowing
+  EmitBlock(createBasicBlock("Try.Prelude"));
+  {
+    auto Loc = S.getTryLoc();
+    ASTContext& C = getContext();
+    IdentifierInfo* IIObj = &C.Idents.get("__exception_state");
+    IdentifierInfo* IIArg = &C.Idents.get("__exception");
+    auto VarObj = VarDecl::Create(C, const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
+          Loc, Loc, IIObj, C.getExceptionObjectType(), nullptr, SC_Auto);
+    auto VarArg = VarDecl::Create(C, const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
+          Loc, Loc, IIArg, C.getExceptionParamType(), nullptr, SC_Auto);
+    auto Obj = EmitAutoVarAlloca(*VarObj);
+    auto Arg = EmitAutoVarAlloca(*VarArg);
+    auto ObjAddr = Obj.getAllocatedAddress();
+
+    // Initialse 'threw' field to false
+    LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), C.getExceptionParamType());
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
+    EmitStoreThroughLValue(RValue::get(getSize(*this, 0)), LV);
+
+    // Assign address to __exception pointer
+    LValue Addr = MakeAddrLValue(Arg.getAllocatedAddress(), C.getExceptionParamType());
+    EmitStoreThroughLValue(RValue::get(ObjAddr.getPointer()), Addr);
+
+    // Push overriding exception decl
+    CXXABIExceptDeclStack.push_back(VarArg);
+  }
+
   unsigned NumHandlers = S.getNumHandlers();
   EHCatchScope *CatchScope = EHStack.pushCatch(NumHandlers);
 
@@ -641,6 +674,22 @@ static DeclContext::lookup_result LookUpConstructors(ASTContext& C, CXXRecordDec
   return Class->lookup(Name);
 }
 
+void CodeGenFunction::MaybeCopyBackExceptionState()
+{
+  // Ignore throw within try
+  if (CXXABIExceptDeclStack.size() < 2 ||
+    (CXXABIExceptDeclStack.size() - 1) <= catchHandlerBlockStack.size())
+    return;
+  VarDecl *Dst = CXXABIExceptDeclStack[CXXABIExceptDeclStack.size()-2];
+  Address SrcAddr = GetAddrOfLocalVar(curExceptDecl());
+  Address DstAddr = GetAddrOfLocalVar(Dst);
+  auto size = getContext().getTypeSize(
+    getContext().getExceptionObjectType().getTypePtr()) / 8;
+  auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
+  llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
+  Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
+}
+
 void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
   FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
   FunctionDecl *codeDecl = dyn_cast_or_null<FunctionDecl>(
@@ -648,6 +697,8 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
   if (codeDecl != nullptr)
     curDecl = codeDecl;
   const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
+
+  EmitBlock(createBasicBlock("Throw"));
 
   // First check if within noexcept context. If so, just terminate.
   if (catchHandlerBlockStack.size() == 0 && (!FPT || FPT->getExceptionSpecType()
@@ -660,11 +711,11 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
 
   LValueBaseInfo BaseInfo;
   TBAAAccessInfo TBAAInfo;
-  Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
+  Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
 
   auto ObjType = E->getSubExpr() ? E->getSubExpr()->getType() : QualType();
 
-  auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+  auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
   Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
   LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
@@ -742,12 +793,16 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
       llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(Target, StructorType::Complete);
       // Get thunk as required
       llvm::Constant *Thunk = CGM.EmitExceptionThunk(GlobalDecl(Target, Ctor_Complete), FPtr);
+      if (!Thunk) Thunk = FPtr;
       llvm::Value *Ptr = Builder.CreateBitCast(Thunk, ConvertType(LV4.getType()));
       EmitStoreThroughLValue(RValue::get(Ptr), LV4);
     }
   }
 
-  // Jump to first handler if one in scopepora
+  // Throw within catch requires sync w/ local copy
+  MaybeCopyBackExceptionState();
+
+  // Jump to first handler if one in scope
   if (catchHandlerBlockStack.size() != 0) {
     EmitBranchThroughCleanup(catchHandlerBlockStack.back());
   }
@@ -773,7 +828,6 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   if (HaveInsertPoint())
     Builder.CreateBr(ContBB);
   
-
   EHCatchScope &CatchScope = cast<EHCatchScope>(*EHStack.begin());
   assert(CatchScope.getNumHandlers() == NumHandlers);
 
@@ -796,14 +850,13 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     QualType CT = C->getCaughtType();
     bool IsCatchAll = (CT == QualType());
 
-    // Emit block
     RunCleanupsScope CatchScope(*this);
     EmitBlock(Handler.Block);
 
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
-    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
     Address EStateAddr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue EStateLV = MakeAddrLValue(EStateAddr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
@@ -818,8 +871,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       {
         /*LValueBaseInfo BaseInfo;
         TBAAAccessInfo TBAAInfo;
-        Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
-        auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+        Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+        auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
         Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
         LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);*/
         LValue TypeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrType);
@@ -846,6 +899,9 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       }
       // Otherwise return empty
       else {
+        // Throw within try/catch requires sync w/ local copy
+        MaybeCopyBackExceptionState();
+
         Expr *e = new (getContext()) CallExpr (getContext(),
           Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
         e->setEmpty(true);
@@ -914,8 +970,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     {
       /*LValueBaseInfo BaseInfo;
       TBAAAccessInfo TBAAInfo;
-      Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
-      auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+      Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+      auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
       Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
       LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);*/
       LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
@@ -962,6 +1018,9 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   }
   // Emit continuing block
   EmitBlock(ContBB);
+
+  // Pop exception decl
+  CXXABIExceptDeclStack.pop_back();
 }
 
 llvm::BasicBlock *

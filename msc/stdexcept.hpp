@@ -1,6 +1,8 @@
 #pragma once
+#include <type_traits>
 
 extern "C" {
+    alignas(64)
     static unsigned char __exception_obj_buffer[64];
 }
 
@@ -13,6 +15,9 @@ struct __exception_t {
     void(*dtor)(void*);
 };
 static __exception_t __type_dummy;
+
+static_assert(std::is_trivially_copyable<__exception_t>::value,"");
+static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
 #define TRY __builtin_try();
 #define CATCH(x) __builtin_catch(); {x} __builtin_catch_end();
@@ -47,4 +52,8 @@ namespace std
             }
         }
     };
+
+    inline bool __type_is_base(type_id base, type_id super) noexcept {
+
+    }
 }

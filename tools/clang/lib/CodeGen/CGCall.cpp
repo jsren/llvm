@@ -4537,8 +4537,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   {
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(CXXABIExceptDecl);
-    auto PtrTy = CXXABIExceptDecl->getType()->castAs<PointerType>();
+    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
@@ -4569,8 +4569,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
     // Emit goto catch handler if one present
     if (catchHandlerBlockStack.size() > 0) {
+      // Throw within catch requires sync w/ local copy
+      MaybeCopyBackExceptionState();
       EmitBranchThroughCleanup(catchHandlerBlockStack.back());
-      //EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
     }
     // Check if within noexcept context. If so, just terminate.
     else if (!curFuncThrows) {
@@ -4579,6 +4580,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     }
     // Otherwise return empty
     else {
+      // Throw within catch requires sync w/ local copy
+      MaybeCopyBackExceptionState();
       Expr *e = new (getContext()) CallExpr (getContext(),
         Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
       e->setEmpty(true);
