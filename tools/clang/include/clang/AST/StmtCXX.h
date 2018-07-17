@@ -30,6 +30,7 @@ class CXXCatchStmt : public Stmt {
   SourceLocation CatchLoc;
   /// The exception-declaration of the type.
   VarDecl *ExceptionDecl;
+  mutable VarDecl *ObjDecl;
   /// The handler block.
   Stmt *HandlerBlock;
 
@@ -48,6 +49,8 @@ public:
 
   SourceLocation getCatchLoc() const { return CatchLoc; }
   VarDecl *getExceptionDecl() const { return ExceptionDecl; }
+  VarDecl *getObjDecl() const { return ObjDecl; }
+  void setObjDecl(VarDecl *VD) const { ObjDecl = VD; }
   QualType getCaughtType() const;
   Stmt *getHandlerBlock() const { return HandlerBlock; }
 

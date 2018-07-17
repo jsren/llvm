@@ -1419,7 +1419,10 @@ private:
   }
 
   void MaybeCopyBackExceptionState();
-
+  void EmitExceptionCheck(bool checkFlag = true);
+  bool WithinThrows();
+  llvm::Value *GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out);
+  llvm::Value *GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_out);
 
   llvm::Value *CXXABIExceptValue{};
   llvm::Value *CXXExceptValue{};

@@ -1542,11 +1542,15 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     TryMarkNoThrow(CurFn);
 }
 
+#include <regex>
+
 VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
   std::string Name = QualType::getAsString(T.split(),
     getContext().getPrintingPolicy());
 
   std::replace(Name.begin(), Name.end(), ' ', '_');
+  Name = std::regex_replace(Name, std::regex("\\*"), "__ptr");
+
   Name = "__typeid_for_" + Name;
   const char* CName = Name.c_str();
 

@@ -4533,64 +4533,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       }
     }
   }
-  if (throws)
-  {
-    LValueBaseInfo BaseInfo;
-    TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
-    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
-    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
-    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
-
-    // Check 'threw' value after callee
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
-    RValue RV = EmitLoadOfLValue(LV, SourceLocation());
-    llvm::Value *Val = Builder.CreateICmp(
-      llvm::CmpInst::ICMP_NE, RV.getScalarVal(), getSize(*this, 0), "cmp");
-
-    llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
-    llvm::BasicBlock *FalseBlock = createBasicBlock("if.end");
-
-    Builder.CreateCondBr(Val, TrueBlock, FalseBlock, nullptr, nullptr);
-    EmitBlock(TrueBlock);
-
-    bool curFuncThrows = false;
-    {
-      FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
-      FunctionDecl *codeDecl = dyn_cast_or_null<FunctionDecl>(
-        const_cast<Decl*>(CurCodeDecl));
-      if (codeDecl != nullptr)
-        curDecl = codeDecl;
-      const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
-
-      curFuncThrows = FPT && FPT->getExceptionSpecType()
-          == ExceptionSpecificationType::EST_Throws;
-    }
-
-    // Emit goto catch handler if one present
-    if (catchHandlerBlockStack.size() > 0) {
-      // Throw within catch requires sync w/ local copy
-      MaybeCopyBackExceptionState();
-      EmitBranchThroughCleanup(catchHandlerBlockStack.back());
-    }
-    // Check if within noexcept context. If so, just terminate.
-    else if (!curFuncThrows) {
-      Builder.CreateCall(CGM.getTerminateFn());
-      Builder.CreateUnreachable();
-    }
-    // Otherwise return empty
-    else {
-      // Throw within catch requires sync w/ local copy
-      MaybeCopyBackExceptionState();
-      Expr *e = new (getContext()) CallExpr (getContext(),
-        Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
-      e->setEmpty(true);
-      ReturnStmt *RT = new (getContext()) ReturnStmt(
-        SourceLocation(), e, nullptr);
-      EmitReturnStmt(*RT);
-    }
-    EmitBlock(FalseBlock);
-  }
+  if (throws) EmitExceptionCheck();
 
   return Ret;
 }
