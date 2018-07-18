@@ -714,6 +714,7 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag)
   if (catchHandlerBlockStack.size() > 0) {
     // Throw within catch requires sync w/ local copy
     MaybeCopyBackExceptionState();
+    // Dtors cannot throw, thus we can call using 'throwing' state
     EmitBranchThroughCleanup(catchHandlerBlockStack.back());
   }
   // Check if within noexcept context. If so, just terminate.
@@ -803,7 +804,6 @@ llvm::Value *CodeGenFunction::GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_ou
     }
 }
 
-
 void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
   FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
   FunctionDecl *codeDecl = dyn_cast_or_null<FunctionDecl>(
@@ -874,9 +874,8 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
   else {
     // We're re-throwing, just un-zero the siezzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz HOW
   }
-  // Throw within catch requires sync w/ local copy
-  MaybeCopyBackExceptionState();
-  EmitExceptionCheck(false);
+  // Jump to correct location
+  EmitExceptionCheck(/*checkFlag=*/false);
 }
 
 static bool TypeInherits(const CXXRecordDecl *RD) {
@@ -967,6 +966,13 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       // Jump to next catch handler if one present
       if (NextBlock != nullptr) {
           Builder.CreateBr(NextBlock);
+      }
+      // Emit goto outer catch handler if one present
+      else if (catchHandlerBlockStack.size() > 0) {
+        // Throw within catch requires sync w/ local copy
+        MaybeCopyBackExceptionState();
+        // Dtors cannot throw, thus we can call using 'throwing' state
+        EmitBranchThroughCleanup(catchHandlerBlockStack.back());
       }
       // Otherwise return empty
       else {

@@ -57,29 +57,41 @@ def run_variants(filename : str, outfile : str, expected_rc : int):
         args.extend(['-o', outfile, filename])
         yield run(filename, outfile, expected_rc, args)
 
-if __name__ == "__main__":
-    import re
-    spec = re.compile("//\\s*expected:\\s*(\\d+).*")
 
-    dir = os.path.dirname(__file__)
-    for file in sorted(os.listdir(dir), key=split_alpha_num):
-        filepath = os.path.join(dir, file)
-        expected_rc = 0
-        if filepath.endswith(".cpp"):
-            with open(filepath, "r") as fs:
-                for line in fs:
-                    if not line:
-                        continue
-                    res = spec.match(line)
-                    if res:
-                        expected_rc = int(res.group(1))
-                    else:
-                        print("[WARN] Missing expected RC:", filepath)
-                    break
-            
-            outfile = os.path.join(dir, "bin", file) + '.exe'
-            for res in run_variants(filepath, outfile, expected_rc):
-                if res.succeeded:
-                    print("[PASS]", file)
-                else:
-                    print("[FAIL]", file, res.msg)
+import re
+rc_spec = re.compile("//\\s*expected:\\s*(\\d+).*")
+
+def test(filepath : str, outfile : str):
+    expected_rc = 0
+    with open(filepath, "r") as fs:
+        for line in fs:
+            if not line:
+                continue
+            res = rc_spec.match(line)
+            if res:
+                expected_rc = int(res.group(1))
+            else:
+                print("[WARN] Missing expected RC:", filepath)
+            break
+    for res in run_variants(filepath, outfile, expected_rc):
+        if res.succeeded:
+            print("[PASS]", filepath)
+        else:
+            print("[FAIL]", filepath, res.msg)
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1:
+        for filepath in sys.argv[1:]:
+            dir = os.path.dirname(filepath)
+            filename = os.path.basename(filepath)
+            outfile = os.path.join(dir, "bin", filename)
+            test(filepath, outfile)
+    else:
+        dir = os.path.dirname(__file__)
+        for file in sorted(os.listdir(dir), key=split_alpha_num):
+            if file.endswith(".cpp"):
+                filepath = os.path.join(dir, file)
+                outfile = os.path.join(dir, "bin", file) + '.exe'
+                test(filepath, outfile)
