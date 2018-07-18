@@ -2,12 +2,13 @@
 import os
 import re
 import subprocess
-from typing import List
+from typing import List, Tuple, Any, Union
 
 compiler = "/source/build-llvm/bin/clang++"
-default_args = [compiler, '-Wno-everything', '-fzcexceptions', '-g', '-O0', '-std=c++17']
+default_args = [compiler, '-Wno-everything', '-g', '-std=c++17']
+variant_args = [('-fzcexceptions', '-fexceptions'), ('-O0', '-O3')]
 
-def split_alpha_num(s):
+def split_alpha_num(s) -> Tuple[Union[str, int]]:
     vs = re.split('([0-9]+)', s)
     if 1 < len(vs) and vs[1]: vs[1] = int(vs[1])
     return vs
@@ -19,14 +20,12 @@ class Result:
         self.succeeded = succeeded
         self.msg = msg
 
-def run(filename : str, outfile : str, expected_rc : int):
-    args = list(default_args)
-    args.extend(['-o', outfile, filename])
+def run(filename : str, outfile : str, expected_rc : int, args : List[str]) -> Result:
     try:
         proc = subprocess.run(args, timeout=10, check=True)
     except subprocess.TimeoutExpired:
         return Result(outfile, args, False, "Timeout exceeded when compiling")
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         return Result(outfile, args, False, "Compilation failed")
     try:
         proc = subprocess.run([outfile], timeout=5)
@@ -37,6 +36,26 @@ def run(filename : str, outfile : str, expected_rc : int):
             return Result(outfile, args, False, "Expected RC '{}', got '{}'".format(expected_rc, proc.returncode))
         else:
             return Result(outfile, args, True, "Passed")
+
+def variant_iter(variants : List[Tuple[Any]]) -> List[Any]:
+    indexes = [0] * len(variants)
+    while True:
+        yield [variants[i][indexes[i]] for i in range(len(indexes))]
+        for i in range(len(indexes)):
+            if indexes[i] < (len(variants[i]) - 1):
+                indexes[i] += 1
+                break
+            else:
+                indexes[i] = 0
+                if i == (len(variants) - 1):
+                    raise StopIteration()
+
+def run_variants(filename : str, outfile : str, expected_rc : int):
+    for var in variant_iter(variant_args):
+        args = list(default_args)
+        args.extend(var)
+        args.extend(['-o', outfile, filename])
+        yield run(filename, outfile, expected_rc, args)
 
 if __name__ == "__main__":
     import re
@@ -59,8 +78,8 @@ if __name__ == "__main__":
                     break
             
             outfile = os.path.join(dir, "bin", file) + '.exe'
-            res = run(filepath, outfile, expected_rc)
-            if res.succeeded:
-                print("[PASS]", file)
-            else:
-                print("[FAIL]", file, res.msg)
+            for res in run_variants(filepath, outfile, expected_rc):
+                if res.succeeded:
+                    print("[PASS]", file)
+                else:
+                    print("[FAIL]", file, res.msg)

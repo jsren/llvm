@@ -1,11 +1,11 @@
-// expected: 1
+// expected: 12
 #include "stdexcept.hpp"
 
 int main()
 {
     test_setup();
     try {
-        throw 1;
+        throw 12;
     }
     catch (const int& i) {
         return i;

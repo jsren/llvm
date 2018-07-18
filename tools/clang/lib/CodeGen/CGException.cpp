@@ -924,6 +924,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     llvm::BasicBlock *NextBlock = (I != (NumHandlers-1) ? Handlers[I+1].Block : nullptr);
 
     QualType CT = C->getCaughtType();
+    QualType NCT = CT;
     bool IsCatchAll = (CT == QualType());
 
     RunCleanupsScope CatchScope(*this);
@@ -985,12 +986,11 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     // Emit catch variable
     if (!IsCatchAll) {
       AutoVarEmission CatchVar = EmitAutoVarAlloca(*C->getExceptionDecl());
-      EmitAutoVarCleanups(CatchVar);
 
       assert(getContext().ExceptBufferDecl && "Missing declaration for __exception_obj_buffer");
       // Copy exception object
       {
-        auto NCT = GetNakedCatchType(CT);
+        auto VT = GetNakedCatchType(CT);
         bool isByRef = false;
         // If decl is by-value, obj decl is the same as handler decl
         if (!CT.getTypePtr()->isReferenceType()) {
@@ -999,6 +999,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         // Create VarDec for actual object if decl is by-reference
         else {
           isByRef = true;
+          NCT = VT;
           auto Loc = C->getCatchLoc();
           IdentifierInfo* IIObj = &getContext().Idents.get("__exception_obj");
           auto VarObj = VarDecl::Create(getContext(),
@@ -1009,10 +1010,10 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 
         auto *ExceptBufferDecl = getContext().ExceptBufferDecl;
 
-        Address ObjAddr = CatchVar.getAllocatedAddress();
+        Address ObjAddr = CatchVar.getObjectAddress(*this);
         if (isByRef) {
           auto A = EmitAutoVarAlloca(*const_cast<VarDecl*>(C->getObjDecl()));
-          ObjAddr = A.getAllocatedAddress();
+          ObjAddr = A.getObjectAddress(*this);
         }
         DeclRefExpr BufferDR(ExceptBufferDecl, false,
                         ExceptBufferDecl->getType(), VK_LValue, SourceLocation());
@@ -1021,7 +1022,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         // or something.
         LValue BufferLV = EmitDeclRefLValue(&BufferDR);
         if (isByRef) {
-          Builder.CreateStore(ObjAddr.getPointer(), CatchVar.getAllocatedAddress());
+          llvm::Value *Addr = Builder.CreateBitCast(ObjAddr.getPointer(), ConvertTypeForMem(CT));
+          Builder.CreateStore(Addr, CatchVar.getObjectAddress(*this));
         }
 
         llvm::Type *T = ConvertType(getContext().ExceptMbrCtor->getType());
@@ -1050,14 +1052,16 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 
         // If missing ctor, treat as trivial
         EmitBlock(ElseBlock);
-        auto size = getContext().getTypeSize(CT.getTypePtr()) / 8;
+        auto size = getContext().getTypeSize(NCT.getTypePtr()) / 8;
         auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
         llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
         Builder.CreateMemCpy(ObjAddr, BufferLV.getAddress(), SizeVal, false);
 
         EmitBlock(ContBlock);
       }
+      EmitAutoVarCleanups(CatchVar);
     }
+
 
     // Local-copy and zero size (unless function-try where we propagate)
     if (!IsFnTryBlock)

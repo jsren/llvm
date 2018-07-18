@@ -23,6 +23,8 @@ extern "C" {
     [[gnu::weak]] alignas(1)
         char __typeid_for_int = 0;
     [[gnu::weak]] alignas(1)
+        char __typeid_for_int___ptr = 0;
+    [[gnu::weak]] alignas(1)
         char __typeid_for_bool = 0;
     [[gnu::weak]] alignas(1)
         char __typeid_for_EmptyObj = 0;
@@ -118,12 +120,12 @@ struct DtorThrowsObj {
     ~DtorThrowsObj() { throw 0; }
 };
 struct BaseObj {
-    inline virtual int value() const {
+    virtual int value() const {
         return 1;
     }
 };
-struct SuperObj {
-    inline virtual int value() const {
+struct SuperObj : BaseObj {
+    virtual int value() const override {
         return 2;
     }
 };
