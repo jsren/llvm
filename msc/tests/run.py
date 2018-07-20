@@ -5,7 +5,7 @@ import subprocess
 from typing import List, Tuple, Any, Union
 
 compiler = "/source/build-llvm/bin/clang++"
-default_args = [compiler, '-Wno-everything', '-g', '-std=c++17']
+default_args = [compiler, '-Wno-everything', '-g', '-std=c++14', '-Xlinker', '-Tlink.ld']
 variant_args = [('-fzcexceptions', '-fexceptions'), ('-O0', '-O3')]
 
 def split_alpha_num(s) -> Tuple[Union[str, int]]:
@@ -71,7 +71,8 @@ def test(filepath : str, outfile : str):
             if res:
                 expected_rc = int(res.group(1))
             else:
-                print("[WARN] Missing expected RC:", filepath)
+                print("[WARN] Missing expected RC:", filepath, "skipping.")
+                return
             break
     for res in run_variants(filepath, outfile, expected_rc):
         if res.succeeded:
@@ -86,7 +87,7 @@ if __name__ == "__main__":
         for filepath in sys.argv[1:]:
             dir = os.path.dirname(filepath)
             filename = os.path.basename(filepath)
-            outfile = os.path.join(dir, "bin", filename)
+            outfile = os.path.join(dir, "bin", filename) + '.exe'
             test(filepath, outfile)
     else:
         dir = os.path.dirname(__file__)

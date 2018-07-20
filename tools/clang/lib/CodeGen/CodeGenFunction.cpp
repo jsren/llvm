@@ -1293,8 +1293,9 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
   }
 
   const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
-  if ((FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) || forceThrows) {
+  if (getLangOpts().ZCExceptions &&
+    ((FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) || forceThrows)) {
     CGM.getCXXABI().buildExceptionParam(*this, Args);
   }
 

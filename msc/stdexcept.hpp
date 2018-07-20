@@ -53,7 +53,7 @@ namespace std
         }
     };
 
-    inline bool __type_is_base(type_id base, type_id super) noexcept {
+    inline bool __type_is_not_base(type_id base, type_id super) noexcept {
 
     }
 }

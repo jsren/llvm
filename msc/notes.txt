@@ -11,6 +11,12 @@ IdentifierTable.h:501 <- IdentifierTable::get inserts identifier name into table
 Table is in Preprocessor.h:230 (getIdentifierTable)
 Identifier.setIdentifierInfo()
 
+clang::DeclaratorChunk::getArray (TypeQuals=0, isStatic=false, isStar=false, NumElts=0x9f16950, LBLoc=..., RBLoc=...) at /source/llvm/tools/clang/include/clang/Sema/DeclSpec.h:1569
+clang::Sema::BuildArrayType (this=0x9f0ace0, T=..., ASM=clang::ArrayType::Normal, ArraySize=0x9f16950, Quals=0, Brackets=..., Entity=...) at /source/llvm/tools/clang/lib/Sema/SemaType.cpp:2091
+clang::ASTContext::getVariableArrayType (this=0x9ec9d70, EltTy=..., NumElts=0x9f16978, ASM=clang::ArrayType::Normal, IndexTypeQuals=0, Brackets=...) at /source/llvm/tools/clang/lib/AST/ASTContext.cpp:3160
+Use this to construct required VariableArrayType. Be aware that it adds it to a list under ASTContext of VLA types.
+
+VariableArrayType
 
 ParseAST.cpp:116 <- ParseAST
 Parser.cpp:546 <- Parser::ParseTopLevelDecl

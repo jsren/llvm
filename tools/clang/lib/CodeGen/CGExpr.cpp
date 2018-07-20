@@ -4692,7 +4692,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   }
 
   CanQual<FunctionProtoType> FTP = GetFormalType(FD);
-  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+  if (getLangOpts().ZCExceptions &&
+    !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     // Push exception object pointer.
     LoadExceptParam(Args);

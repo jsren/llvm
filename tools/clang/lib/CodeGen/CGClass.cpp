@@ -2017,7 +2017,7 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   // Push exception object pointer.
   const FunctionProtoType *FPT = D->getType()->castAs<FunctionProtoType>();
 
-  if (FPT && FPT->getExceptionSpecType()
+  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     LoadExceptParam(Args);
   }
@@ -2133,8 +2133,8 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   CGCallee Callee = CGCallee::forDirect(CalleePtr, D);
 
   CanQual<FunctionProtoType> FTP = GetFormalType(cast<FunctionDecl>(D));
-  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (getLangOpts().ZCExceptions && !FTP.isNull() &&
+    FTP.getTypePtr()->getExceptionSpecType() == ExceptionSpecificationType::EST_Throws) {
     Callee.hasExceptParam = true;
   }
   EmitCall(Info, Callee, ReturnValueSlot(), Args);
@@ -2287,7 +2287,7 @@ CodeGenFunction::EmitSynthesizedCXXCopyCtorCall(const CXXConstructorDecl *D,
   Args.add(RValue::get(This.getPointer()), D->getThisType(getContext()));
 
   // Push exception object pointer.
-  if (FPT && FPT->getExceptionSpecType()
+  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     LoadExceptParam(Args);
   }

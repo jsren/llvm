@@ -193,7 +193,8 @@ CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionProtoType> FTP,
                                       const FunctionDecl *FD) {
   SmallVector<CanQualType, 16> argTypes;
 
-  if (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+  if (CGM.getLangOpts().ZCExceptions &&
+    !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws && (!FD || !FD->isMain()))
   {
     // Add the '__exception' pointer.
@@ -265,8 +266,9 @@ CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
     argTypes.push_back(Context.VoidPtrTy);
 
   // Add the '__exception' pointer.
-  if ((FTP && FTP->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) || forceThrows)
+  if (CGM.getLangOpts().ZCExceptions && (
+    (FTP && FTP->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) || forceThrows))
   {
     auto T = Context.getExceptionParamType().getCanonicalType();
     argTypes.push_back(CanQualType::CreateUnsafe(T));
@@ -330,8 +332,9 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
 
   CanQual<FunctionProtoType> FTP = GetFormalType(MD);
 
-  if ((!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) || forceThrows)
+  if (CGM.getLangOpts().ZCExceptions && (
+    (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) || forceThrows))
   {
     // Add the '__exception' pointer.
     auto T = Context.getExceptionParamType().getCanonicalType();
@@ -4533,7 +4536,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       }
     }
   }
-  if (throws) EmitExceptionCheck();
+  if (throws && getLangOpts().ZCExceptions)
+    EmitExceptionCheck();
 
   return Ret;
 }

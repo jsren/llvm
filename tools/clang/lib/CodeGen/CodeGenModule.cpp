@@ -2115,8 +2115,8 @@ llvm::Constant *CodeGenModule::EmitExceptionThunk(GlobalDecl GD, llvm::Constant 
   const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
   const CXXConstructorDecl *CD = dyn_cast_or_null<CXXConstructorDecl>(FD);
 
-  if (!FPT || FPT->getExceptionSpecType()
-      != ExceptionSpecificationType::EST_Throws)
+  if (getLangOpts().ZCExceptions && (!FPT || FPT->getExceptionSpecType()
+      != ExceptionSpecificationType::EST_Throws))
   {
     std::string Name = getMangledName(GD).str() + ".throws";
 

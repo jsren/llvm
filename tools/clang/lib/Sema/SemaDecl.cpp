@@ -9181,6 +9181,12 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     }
   }
 
+  if (IdentifierInfo *II = NewFD->getIdentifier())
+  {
+    if (II->isStr("__type_is_not_base")) {
+      Context.ExceptInheritanceFunc = NewFD;
+    }
+  }
   return NewFD;
 }
 

@@ -356,6 +356,7 @@ private:
   FieldDecl *ExceptMbrCtor = nullptr;
   FieldDecl *ExceptMbrDtor = nullptr;
   VarDecl *ExceptBufferDecl = nullptr;
+  FunctionDecl *ExceptInheritanceFunc = nullptr;
   private:
 
   /// Type for the Block descriptor for Blocks CodeGen.

@@ -52,6 +52,28 @@ extern "C" {
         char __typeid_for_BaseObj = 0;
     [[gnu::weak]] alignas(1)
         char __typeid_for_SuperObj = 0;
+
+    struct [[gnu::packed]] __tinfo_entry_t {
+        void* base;
+        void* derived;
+    };
+
+    [[gnu::section(".tinfo"), gnu::used]]
+    alignas(sizeof(void*))
+    static __tinfo_entry_t __tinfo[] = {
+        __tinfo_entry_t{&__typeid_for_BaseObj, &__typeid_for_SuperObj}
+    };
+
+    extern const char __tinfo_start;
+    extern const char __tinfo_end;
+
+    [[gnu::noinline]]
+    static bool __type_is_not_base(void* base, void* super) noexcept {
+        for (auto* e = reinterpret_cast<const __tinfo_entry_t*>(&__tinfo_start); e < (void*)&__tinfo_end; e++) {
+            if (e->base == base && e->derived == super) return false;
+        }
+        return true;
+    }
 }
 
 struct EmptyObj { };
@@ -108,7 +130,7 @@ struct CtorThrowsObj {
 struct MoveThrowsObj {
     int i;
     MoveThrowsObj(int i) : i(i) { }
-    MoveThrowsObj(const MoveThrowsObj&) = delete;
+    MoveThrowsObj(const MoveThrowsObj& o) throws : i(o.i) { throw 3; };
     MoveThrowsObj(MoveThrowsObj&& o) throws : i(o.i) { throw 3; };
     ~MoveThrowsObj() = default;
 };
@@ -128,6 +150,8 @@ struct SuperObj : BaseObj {
     virtual int value() const override {
         return 2;
     }
+    SuperObj() = default;
+    SuperObj(SuperObj&&) = default;
 };
 
 namespace std
@@ -159,10 +183,6 @@ namespace std
             }
         }
     };
-
-    inline bool __type_is_base(type_id base, type_id super) noexcept {
-        return false;
-    }
 }
 
 #include <exception>

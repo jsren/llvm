@@ -703,6 +703,12 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag)
     llvm::Value *Val = Builder.CreateICmp(
       llvm::CmpInst::ICMP_NE, RV.getScalarVal(), getSize(*this, 0), "cmp");
 
+    // Set branch as unlikely
+    if (CGM.getCodeGenOpts().OptimizationLevel != 0) {
+      llvm::Value *FnExpect = CGM.getIntrinsic(llvm::Intrinsic::expect, Val->getType());
+      Val = Builder.CreateCall(FnExpect, { Val, Builder.getFalse() }, "expval");
+    }
+
     FalseBlock = createBasicBlock("if.end");
     llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
 
@@ -770,6 +776,8 @@ llvm::Value *CodeGenFunction::GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_ou
     }
 }
 
+// In theory, we do not require a copy constructor at all - just move
+// However, have yet to update Sema with this
 llvm::Value *CodeGenFunction::GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_out) {
     bool hasTrivialMove = !R || (R->hasMoveConstructor() && !R->hasNonTrivialMoveConstructor());
     bool hasTrivialCopy = !R || (R->hasCopyConstructor() && !R->hasNonTrivialCopyConstructor());
@@ -888,10 +896,20 @@ static bool TypeInherits(CanQualType T) {
   return TypeInherits(RD);
 }
 
-static QualType GetNakedCatchType(QualType OriginalT) {
-  QualType CQT = OriginalT.getCanonicalType();
-  const Type *T = CQT.getTypePtr();
-  return T->isReferenceType() ? T->getPointeeType() : CQT;
+static bool TypeIsVirtual(const CXXRecordDecl *RD) {
+  return RD && (RD->isPolymorphic() || TypeInherits(RD));
+}
+
+static bool TypeIsVirtual(CanQualType T)
+{
+  QualType QT = T;
+  CXXRecordDecl *RD = QT.getTypePtr()->getAsCXXRecordDecl();
+  return TypeIsVirtual(RD);
+}
+
+static QualType GetNakedCatchType(ASTContext& C, QualType OriginalT) {
+  Qualifiers CaughtTypeQuals;
+  return C.getUnqualifiedArrayType(OriginalT.getCanonicalType().getNonReferenceType(), CaughtTypeQuals);
 }
 
 void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
@@ -940,29 +958,46 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     if (!IsCatchAll)
     {
       Qualifiers CaughtTypeQuals;
-      QualType CaughtType = CGM.getContext().getUnqualifiedArrayType(
-          C->getCaughtType().getNonReferenceType(), CaughtTypeQuals);
+      /*QualType CaughtType = CGM.getContext().getUnqualifiedArrayType(
+          C->getCaughtType().getNonReferenceType(), CaughtTypeQuals);*/
+      QualType CaughtType = GetNakedCatchType(getContext(), C->getCaughtType());
 
+      llvm::Value *ObjTID;
+      llvm::Value *CatchTID;
       llvm::Value *Val;
       {
         LValue TypeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrType);
         RValue TypeRV = EmitLoadOfLValue(TypeLV, SourceLocation());
         VarDecl *Decl = VarDeclForTypeID(CaughtType);
+        ObjTID = TypeRV.getScalarVal();
 
         DeclRefExpr *DeclRef = DeclRefExpr::Create(
           CGM.getContext(), NestedNameSpecifierLoc{}, SourceLocation{},
           Decl, false, SourceLocation{}, Decl->getType(), ExprValueKind::VK_LValue);
 
         LValue TIDLV = EmitDeclRefLValue(DeclRef);
+        CatchTID = TIDLV.getPointer();
         Val = Builder.CreateICmp(
-          llvm::CmpInst::ICMP_NE, TypeRV.getScalarVal(),
-          TIDLV.getPointer(), "cmp");
+          llvm::CmpInst::ICMP_NE, ObjTID, CatchTID, "cmp");
       }
-      llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+      llvm::BasicBlock *TrueBlock = createBasicBlock("Catch.Skip");
       llvm::BasicBlock *ContBlock = createBasicBlock("Catch.ExceptDecl");
-      Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
-      EmitBlock(TrueBlock);
+      llvm::BasicBlock *ElseBlock = createBasicBlock("Catch.InheritLookup");
 
+      // If typeid equality check fails for virtual type also check for inheritance
+      auto VT = (!CT.getTypePtr()->isReferenceType()) ? CT : GetNakedCatchType(getContext(), CT);
+      if (TypeIsVirtual(getContext().getCanonicalType(VT))) {
+        Builder.CreateCondBr(Val, ElseBlock, ContBlock, nullptr, nullptr);
+
+        EmitBlock(ElseBlock);
+        assert(getContext().ExceptInheritanceFunc && "Missing __type_is_not_base declaration.");
+        llvm::Constant *FPtr = CGM.GetAddrOfFunction(getContext().ExceptInheritanceFunc);
+        Val = Builder.CreateCall(FPtr, { CatchTID, ObjTID });
+      }
+      
+      Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
+
+      EmitBlock(TrueBlock);
       // Jump to next catch handler if one present
       if (NextBlock != nullptr) {
           Builder.CreateBr(NextBlock);
@@ -986,7 +1021,15 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
           SourceLocation(), e, nullptr);
         EmitReturnStmt(*RT);
       }
+
       EmitBlock(ContBlock);
+    }
+
+    // Local-copy and zero size (unless function-try where we propagate)
+    if (!IsFnTryBlock)
+    {
+      LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
+      EmitStoreThroughLValue(RValue::get(getSize(*this, 0)), SizeLV);
     }
 
     // Emit catch variable
@@ -996,7 +1039,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       assert(getContext().ExceptBufferDecl && "Missing declaration for __exception_obj_buffer");
       // Copy exception object
       {
-        auto VT = GetNakedCatchType(CT);
+        auto VT = GetNakedCatchType(getContext(), CT);
         bool isByRef = false;
         // If decl is by-value, obj decl is the same as handler decl
         if (!CT.getTypePtr()->isReferenceType()) {
@@ -1068,13 +1111,6 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       EmitAutoVarCleanups(CatchVar);
     }
 
-
-    // Local-copy and zero size (unless function-try where we propagate)
-    if (!IsFnTryBlock)
-    {
-      LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
-      EmitStoreThroughLValue(RValue::get(getSize(*this, 0)), SizeLV);
-    }
 
     // Emit dtor for buffer
     {
