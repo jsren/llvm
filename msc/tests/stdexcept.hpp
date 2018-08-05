@@ -3,16 +3,30 @@
 
 extern "C" {
     alignas(64)
-    static unsigned char __exception_obj_buffer[64];
+    static /*thread_local*/ unsigned char __exception_obj_buffer[64];
+}
+
+inline unsigned char* __cxa_allocate_exception_obj(
+    decltype(sizeof(int)) size, char alignment) noexcept {
+    return __exception_obj_buffer;
 }
 
 struct __exception_t {
+    // Address of exception object buffer
+    unsigned char *buffer;
+    // Address of list of base types
+    const char** baseTypes;
+    // Type id pointer
     void* type;
+    // Size of exception object
     decltype(sizeof(int)) size;
+    // Alignment of exception object
+    char alignment;
     // If the original ctor is not 'throws', we will emit and assign a thunk instead
     // TODO: support VTT pointer
     void(*ctor)(void*, __exception_t*, void*); 
     void(*dtor)(void*);
+    bool active;
 };
 static __exception_t __type_dummy;
 
@@ -53,7 +67,17 @@ extern "C" {
     [[gnu::weak]] alignas(1)
         char __typeid_for_SuperObj = 0;
 
-    struct [[gnu::packed]] __tinfo_entry_t {
+    [[gnu::weak]] alignas(alignof(char*))
+    char* __typeid_empty_bases[1] = { nullptr };
+
+    // Alternative form
+    [[gnu::weak]] alignas(alignof(char*))
+    char* __typeid_bases_for_SuperObj[] = {
+        &__typeid_for_BaseObj,
+        nullptr
+    };
+
+    /*struct [[gnu::packed]] __tinfo_entry_t {
         void* base;
         void* derived;
     };
@@ -62,15 +86,22 @@ extern "C" {
     alignas(sizeof(void*))
     static __tinfo_entry_t __tinfo[] = {
         __tinfo_entry_t{&__typeid_for_BaseObj, &__typeid_for_SuperObj}
-    };
+    };*/
 
-    extern const char __tinfo_start;
-    extern const char __tinfo_end;
+    /*extern const char __tinfo_start;
+    extern const char __tinfo_end;*/
 
-    [[gnu::noinline]]
+    /*[[gnu::noinline]]
     static bool __type_is_not_base(void* base, void* super) noexcept {
         for (auto* e = reinterpret_cast<const __tinfo_entry_t*>(&__tinfo_start); e < (void*)&__tinfo_end; e++) {
             if (e->base == base && e->derived == super) return false;
+        }
+        return true;
+    }*/
+    [[gnu::noinline]]
+    static bool __type_is_not_base(void* type, const char** super_bases) noexcept {
+        for (; super_bases[0] != nullptr; super_bases++) {
+            if (static_cast<const void*>(super_bases[0]) == type) return false;
         }
         return true;
     }

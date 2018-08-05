@@ -1503,7 +1503,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
   
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrActive);
     EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
 
     return RValue::getIgnored();
@@ -1527,7 +1527,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   
     // Assign object size
     //E->getArg(0)->getType();
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrActive);
     EmitStoreThroughLValue(RValue::get(Builder.getTrue()), LV);
 
     // Get name of type-id to reference

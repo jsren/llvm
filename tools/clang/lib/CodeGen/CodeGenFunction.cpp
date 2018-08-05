@@ -1469,10 +1469,10 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     auto Obj = EmitAutoVarAlloca(*VarObj);
     auto Arg = EmitAutoVarAlloca(*VarArg);
 
-    // Initialse 'threw' field to false
+    // Initialse 'active' flag to false
     LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), C.getExceptionParamType());
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
-    EmitStoreThroughLValue(RValue::get(getSize(*this, 0)), LV);
+    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrActive);
+    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
 
     // Assign address to __exception pointer
     LValue Addr = MakeAddrLValue(Arg.getAllocatedAddress(), C.getExceptionParamType());
@@ -1545,7 +1545,50 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
 
 #include <regex>
 
+VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
+  T = T.getCanonicalType();
+  // If pointer type or has no base types, just assign empty
+  std::string idName = "__typeid_empty_bases";
+
+  const CXXRecordDecl *RD = T.getTypePtr()->getAsCXXRecordDecl();
+  bool hasBases = RD && RD->getNumBases();
+
+  // If not pointer type or inheritless class
+  if (!T->isPointerType() && hasBases != 0) {
+    std::string Name = QualType::getAsString(T.split(),
+      getContext().getPrintingPolicy());
+    std::replace(Name.begin(), Name.end(), ' ', '_');
+    idName = "__typeid_bases_for_" + Name;
+  }
+
+  const char* CName = idName.c_str();
+  IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
+  auto CT = //getContext().getPointerType(
+    getContext().getPointerType(getContext().CharTy); //);
+  
+  // Get file context
+  DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
+  while (!TUnitDC->isFileContext()) {
+    TUnitDC = TUnitDC->getLexicalParent();
+  }
+  // Set C linkage
+  LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+    CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
+    CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
+    true);
+
+  // Create vardecl
+  VarDecl *Decl = VarDecl::Create(
+      CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
+      CurGD.getDecl()->getLocation(), II, CT, nullptr, SC_Extern);
+
+  assert(Decl->getLanguageLinkage() == CLanguageLinkage);
+  return Decl;
+}  
+
 VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
+  T = T.getCanonicalType();
+
   std::string Name = QualType::getAsString(T.split(),
     getContext().getPrintingPolicy());
 

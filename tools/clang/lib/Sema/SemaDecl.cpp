@@ -9186,6 +9186,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     if (II->isStr("__type_is_not_base")) {
       Context.ExceptInheritanceFunc = NewFD;
     }
+    else if (II->isStr("__cxa_allocate_exception_obj")) {
+      Context.ExceptAllocFunc = NewFD;
+    }
   }
   return NewFD;
 }
@@ -14582,6 +14585,9 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       if (name == "size") {
         C.ExceptMbrSize = field;
       }
+      else if (name == "active") {
+        C.ExceptMbrActive = field;
+      }
       else if (name == "type") {
         C.ExceptMbrType = field;
       }
@@ -14591,9 +14597,21 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       else if (name == "ctor") {
         C.ExceptMbrCtor = field;
       }
+      else if (name == "buffer") {
+        C.ExceptMbrBuffer = field;
+      }
+      else if (name == "baseTypes") {
+        C.ExceptMbrBaseTypes = field;
+      }
     }
-    assert(C.ExceptMbrSize && C.ExceptMbrType && C.ExceptMbrDtor && C.ExceptMbrCtor &&
-            "__exception_t missing required field.");
+    assert(C.ExceptMbrSize
+      && C.ExceptMbrActive
+      && C.ExceptMbrType
+      && C.ExceptMbrDtor
+      && C.ExceptMbrCtor
+      && C.ExceptMbrBuffer
+      && C.ExceptMbrBaseTypes
+      && "__exception_t missing required field.");
   }
 }
 

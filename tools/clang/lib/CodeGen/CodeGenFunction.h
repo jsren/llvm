@@ -548,6 +548,7 @@ public:
   }
 
   VarDecl *VarDeclForTypeID(QualType T);
+  VarDecl *VarDeclForBaseTypes(QualType T);
 
   /// Set up the last cleaup that was pushed as a conditional
   /// full-expression cleanup.
