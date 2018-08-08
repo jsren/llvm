@@ -2017,11 +2017,6 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
   // Push exception object pointer.
   const FunctionProtoType *FPT = D->getType()->castAs<FunctionProtoType>();
 
-  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
-    LoadExceptParam(Args);
-  }
-
   // If this is a trivial constructor, emit a memcpy now before we lose
   // the alignment information on the argument.
   // FIXME: It would be better to preserve alignment information into CallArg.
@@ -2034,6 +2029,11 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
     LValue Dest = MakeAddrLValue(This, DestTy);
     EmitAggregateCopyCtor(Dest, Src, Overlap);
     return;
+  }
+
+  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+    LoadExceptParam(Args);
   }
 
   // Add the rest of the user-supplied arguments.

@@ -14603,6 +14603,9 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       else if (name == "baseTypes") {
         C.ExceptMbrBaseTypes = field;
       }
+      else if (name == "ptr") {
+        C.ExceptMbrPtr = field;
+      }
     }
     assert(C.ExceptMbrSize
       && C.ExceptMbrActive
@@ -14611,6 +14614,7 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       && C.ExceptMbrCtor
       && C.ExceptMbrBuffer
       && C.ExceptMbrBaseTypes
+      && C.ExceptMbrPtr
       && "__exception_t missing required field.");
   }
 }

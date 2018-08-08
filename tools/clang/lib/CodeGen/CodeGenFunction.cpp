@@ -1413,6 +1413,10 @@ void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
   FinishFunction(BodyRange.getEnd());
 }
 
+std::string CodeGenFunction::nextExceptionIdentifier(const char* name) {
+  return name + std::to_string(CXXABIExceptDeclStack.size());
+}
+
 void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
                                    const CGFunctionInfo &FnInfo) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
@@ -1457,11 +1461,11 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
-  // Emit implicit exception state if within a C function or main
-  if (FD->isMain() || FD->isExternC()) {
+  // Emit implicit exception state if within a C function or main or throwing dtor
+  if (FD->isMain() || FD->isExternC() || WithinThrowingDtor()) {
     ASTContext& C = getContext();
-    IdentifierInfo* IIObj = &C.Idents.get("__exception_state");
-    IdentifierInfo* IIArg = &C.Idents.get("__exception");
+    IdentifierInfo* IIObj = &C.Idents.get(nextExceptionIdentifier("__exception_state"));
+    IdentifierInfo* IIArg = &C.Idents.get(nextExceptionIdentifier("__exception"));
     auto VarObj = VarDecl::Create(C, const_cast<DeclContext*>(FD->getDeclContext()),
           Loc, Loc, IIObj, C.getExceptionObjectType(), nullptr, SC_Auto);
     auto VarArg = VarDecl::Create(C, const_cast<DeclContext*>(FD->getDeclContext()),

@@ -1420,8 +1420,12 @@ private:
   }
 
   void MaybeCopyBackExceptionState();
-  void EmitExceptionCheck(bool checkFlag = true);
+  void EmitExceptionCheck(bool checkFlag = true, bool forceTerminate = false);
   bool WithinThrows();
+  bool WithinThrowingDtor();
+  void DtorExitCheck();
+  std::string nextExceptionIdentifier(const char* name);
+  
   llvm::Value *GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out);
   llvm::Value *GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_out);
 

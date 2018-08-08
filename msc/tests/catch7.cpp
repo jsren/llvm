@@ -3,7 +3,6 @@
 
 int main()
 {
-    SuperObj so(SuperObj{});
     test_setup();
     try {
         throw SuperObj();

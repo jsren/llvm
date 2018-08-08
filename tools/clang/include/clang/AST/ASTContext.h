@@ -355,6 +355,7 @@ private:
   FieldDecl *ExceptMbrSize = nullptr;
   FieldDecl *ExceptMbrAlign = nullptr;
   FieldDecl *ExceptMbrType = nullptr;
+  FieldDecl *ExceptMbrPtr = nullptr;
   FieldDecl *ExceptMbrCtor = nullptr;
   FieldDecl *ExceptMbrDtor = nullptr;
   FieldDecl *ExceptMbrBaseTypes = nullptr;

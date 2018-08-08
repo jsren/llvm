@@ -1,14 +1,31 @@
 #pragma once
 #include <type_traits>
+#include <cstdlib>
+#include <new>
 
 extern "C" {
     alignas(64)
-    static /*thread_local*/ unsigned char __exception_obj_buffer[64];
+    static /*thread_local*/ unsigned char __exception_obj_buffer[1024];
+
+    static unsigned char* __exception_obj_ptr = __exception_obj_buffer;
 }
 
 inline unsigned char* __cxa_allocate_exception_obj(
-    decltype(sizeof(int)) size, char alignment) noexcept {
-    return __exception_obj_buffer;
+    decltype(sizeof(int)) size, char alignment) noexcept
+{
+    if (__exception_obj_ptr + size > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
+        return new /*((std::align_val_t)alignment)*/ unsigned char[size]();
+    }
+    // TODO: Handle alignment correctly - this doesn't impact on WCET
+    auto out = __exception_obj_ptr;
+    __exception_obj_ptr += size;
+    return out;
+}
+
+inline void __cxa_free_exception_obj(unsigned char* ptr, char alignment) noexcept {
+    if (ptr < __exception_obj_buffer || ptr > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
+        ::operator delete[](ptr/*, (std::align_val_t)alignment*/);
+    }
 }
 
 struct __exception_t {
@@ -27,6 +44,7 @@ struct __exception_t {
     void(*ctor)(void*, __exception_t*, void*); 
     void(*dtor)(void*);
     bool active;
+    bool ptr;
 };
 static __exception_t __type_dummy;
 
@@ -34,6 +52,8 @@ static_assert(std::is_trivially_copyable<__exception_t>::value,"");
 static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
 extern "C" {
+    [[gnu::weak]] alignas(1)
+        char __typeid_for_nullptr_t = 0;
     [[gnu::weak]] alignas(1)
         char __typeid_for_int = 0;
     [[gnu::weak]] alignas(1)
@@ -66,6 +86,8 @@ extern "C" {
         char __typeid_for_BaseObj = 0;
     [[gnu::weak]] alignas(1)
         char __typeid_for_SuperObj = 0;
+    [[gnu::weak]] alignas(1)
+        char __typeid_for_DtorTestObj = 0;
 
     [[gnu::weak]] alignas(alignof(char*))
     char* __typeid_empty_bases[1] = { nullptr };
@@ -170,7 +192,7 @@ struct DtorThrowsObj {
     DtorThrowsObj(int i) : i(i) { }
     DtorThrowsObj(const DtorThrowsObj&) = default;
     DtorThrowsObj(DtorThrowsObj&&) = default;
-    ~DtorThrowsObj() { throw 0; }
+    ~DtorThrowsObj() throws { throw i; }
 };
 struct BaseObj {
     virtual int value() const {
@@ -183,6 +205,13 @@ struct SuperObj : BaseObj {
     }
     SuperObj() = default;
     SuperObj(SuperObj&&) = default;
+};
+struct DtorTestObj {
+    int& i;
+    DtorTestObj(int& i) : i(i) { }
+    DtorTestObj(DtorTestObj&&) = default;
+    DtorTestObj(const DtorTestObj&) = default;
+    ~DtorTestObj() { i++; }
 };
 
 namespace std
