@@ -1172,11 +1172,10 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       EmitBlock(ContBlock);
     }
 
-    // Local-copy and clear active flag (unless function-try where we propagate)
-    if (!IsFnTryBlock)
+    // Clear active flag
     {
       LValue ActiveLV = EmitLValueForField(EStateLV, getContext().ExceptMbrActive);
-      EmitStoreThroughLValue(RValue::get(Builder.getTrue()), ActiveLV);
+      EmitStoreThroughLValue(RValue::get(Builder.getFalse()), ActiveLV);
     }
 
     // Emit catch variable
@@ -1297,6 +1296,14 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     EmitBlock(createBasicBlock("Catch.Body"));
     EmitStmt(C->getHandlerBlock());
     CatchScope.ForceCleanup();
+
+    // Re-throw for function-try blocks
+    if (IsFnTryBlock)
+    {
+      assert(HaveInsertPoint());
+      LValue ActiveLV = EmitLValueForField(EStateLV, getContext().ExceptMbrActive);
+      EmitStoreThroughLValue(RValue::get(Builder.getTrue()), ActiveLV);
+    }
 
     // Jump to end
     if (HaveInsertPoint())
