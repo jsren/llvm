@@ -1179,120 +1179,162 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     }
 
     // Emit catch variable
-    if (!IsCatchAll) {
+
+    Address ObjAddr = Address::invalid();
+    Address VarAddr = Address::invalid();
+
+    if (IsCatchAll) {
+      LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
+      RValue SizeRV = EmitLoadOfLValue(SizeLV, SourceLocation());
+      //LValue AlignLV = EmitLValueForField(EStateLV, getContext().ExceptMbrAlign);
+      //RValue AlignRV = EmitLoadOfLValue(AlignLV, SourceLocation());
+
+      // Generate VLA to hold value
+      CharUnits MaxAlign = CGM.getContext().toCharUnitsFromBits(
+        CGM.getContext().getTargetInfo().getSuitableAlign());
+    
+      VarAddr = CreateTempAlloca(Builder.getInt8Ty(), MaxAlign,
+        "__exception_obj_vla", SizeRV.getScalarVal());
+
+      LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
+      RValue DtorRV = EmitLoadOfLValue(DtorLV, SourceLocation());
+      llvm::Value *Dtor = DtorRV.getScalarVal();
+
+      // Push cleanup for catch-all object
+      PushCatchAllCleanup(Dtor, VarAddr);
+      // Save the stack to clean up object vla
+      if (!DidCallStackSave) {
+        Address Stack =
+          CreateTempAlloca(Int8PtrTy, getPointerAlign(), "saved_stack");
+
+        llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
+        llvm::Value *V = Builder.CreateCall(F);
+        Builder.CreateStore(V, Stack);
+
+        DidCallStackSave = true;
+
+        // Push a cleanup block and restore the stack there.
+        // FIXME: in general circumstances, this should be an EH cleanup.
+        pushStackRestore(NormalCleanup, Stack);
+      }
+    }
+    else
+    {
       AutoVarEmission CatchVar = EmitAutoVarAlloca(*C->getExceptionDecl());
+      VarAddr = CatchVar.getObjectAddress(*this);
+      EmitAutoVarCleanups(CatchVar);
+    }
 
-      //assert(getContext().ExceptBufferDecl && "Missing declaration for __exception_obj_buffer");
-      // Copy exception object
-      {
-        auto VT = GetNakedCatchType(getContext(), CT);
-        bool isByRef = false;
-        // If decl is by-value, obj decl is the same as handler decl
-        if (!CT.getTypePtr()->isReferenceType()) {
-          C->setObjDecl(const_cast<VarDecl*>(C->getExceptionDecl()));
-        }
-        // Create VarDec for actual object if decl is by-reference
-        else {
-          isByRef = true;
-          NCT = VT;
-          auto Loc = C->getCatchLoc();
-          IdentifierInfo* IIObj = &getContext().Idents.get("__exception_obj");
-          auto VarObj = VarDecl::Create(getContext(),
-            const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
-            Loc, Loc, IIObj, NCT, nullptr, SC_Auto);
-          C->setObjDecl(VarObj);
-        }
+    // Handle catch by ref
+    bool isByRef = false;
+    if (!IsCatchAll)
+    {
+      auto VT = GetNakedCatchType(getContext(), CT);
+      // If decl is by-value, obj decl is the same as handler decl
+      if (!CT.getTypePtr()->isReferenceType()) {
+        C->setObjDecl(const_cast<VarDecl*>(C->getExceptionDecl()));
+      }
+      // Create VarDec for actual object if decl is by-reference
+      else {
+        isByRef = true;
+        NCT = VT;
+        auto Loc = C->getCatchLoc();
+        IdentifierInfo* IIObj = &getContext().Idents.get("__exception_obj");
+        auto VarObj = VarDecl::Create(getContext(),
+          const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
+          Loc, Loc, IIObj, NCT, nullptr, SC_Auto);
+        C->setObjDecl(VarObj);
+      }
+    }
 
+    // Allocate space for actual object if catch by ref
+    if (isByRef) {
+      auto A = EmitAutoVarAlloca(*const_cast<VarDecl*>(C->getObjDecl()));
+      ObjAddr = A.getObjectAddress(*this);
 
-        Address ObjAddr = CatchVar.getObjectAddress(*this);
-        if (isByRef) {
-          auto A = EmitAutoVarAlloca(*const_cast<VarDecl*>(C->getObjDecl()));
-          ObjAddr = A.getObjectAddress(*this);
-        }
+      llvm::Value *Addr = Builder.CreateBitCast(ObjAddr.getPointer(), ConvertTypeForMem(CT));
+      Builder.CreateStore(Addr, VarAddr);
+    }
+    else ObjAddr = VarAddr;
 
-        /*auto *ExceptBufferDecl = getContext().ExceptBufferDecl;
-        DeclRefExpr BufferDR(ExceptBufferDecl, false,
-                        ExceptBufferDecl->getType(), VK_LValue, SourceLocation());*/
+    // Copy exception object
+    {
+      /*auto *ExceptBufferDecl = getContext().ExceptBufferDecl;
+      DeclRefExpr BufferDR(ExceptBufferDecl, false,
+                      ExceptBufferDecl->getType(), VK_LValue, SourceLocation());*/
 
-        // Compute the address of the local variable, in case it's a byref
-        // or something.
-        //LValue BufferLV = EmitDeclRefLValue(&BufferDR);
-        LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
-        RValue BufferRV = EmitLoadOfLValue(BufferLV, SourceLocation());
-        if (isByRef) {
-          llvm::Value *Addr = Builder.CreateBitCast(ObjAddr.getPointer(), ConvertTypeForMem(CT));
-          Builder.CreateStore(Addr, CatchVar.getObjectAddress(*this));
-        }
+      LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
+      RValue BufferRV = EmitLoadOfLValue(BufferLV, SourceLocation());
 
-        llvm::Type *T = ConvertType(getContext().ExceptMbrCtor->getType());
-        auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
-        LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
-        RValue CtorRV = EmitLoadOfLValue(CtorLV, SourceLocation());
-        llvm::Value *Ctor = CtorRV.getScalarVal();
-        llvm::Value *Val = Builder.CreateICmp(
-          llvm::CmpInst::ICMP_NE, Ctor, CP, "cmp");
+      llvm::Type *T = ConvertType(getContext().ExceptMbrCtor->getType());
+      auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
+      LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
+      RValue CtorRV = EmitLoadOfLValue(CtorLV, SourceLocation());
+      llvm::Value *Ctor = CtorRV.getScalarVal();
+      llvm::Value *Val = Builder.CreateICmp(
+        llvm::CmpInst::ICMP_NE, Ctor, CP, "cmp");
 
-        llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
-        llvm::BasicBlock *ElseBlock = createBasicBlock("if.else");
-        llvm::BasicBlock *ContBlock = createBasicBlock("if.cont");
+      llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+      llvm::BasicBlock *ElseBlock = createBasicBlock("if.else");
+      llvm::BasicBlock *ContBlock = createBasicBlock("if.cont");
 
-        Builder.CreateCondBr(Val, TrueBlock, ElseBlock, nullptr, nullptr);
-        EmitBlock(TrueBlock);
+      Builder.CreateCondBr(Val, TrueBlock, ElseBlock, nullptr, nullptr);
+      EmitBlock(TrueBlock);
 
-        llvm::Value *Args[] = {ObjAddr.getPointer(), EStateLV.getPointer(), BufferRV.getScalarVal()};
-        Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().VoidPtrTy));
-        Args[2] = Builder.CreateBitCast(Args[2], ConvertType(getContext().VoidPtrTy));
+      llvm::Value *Args[] = {ObjAddr.getPointer(), EStateLV.getPointer(), BufferRV.getScalarVal()};
+      Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().VoidPtrTy));
+      Args[2] = Builder.CreateBitCast(Args[2], ConvertType(getContext().VoidPtrTy));
 
-        Builder.CreateCall(Ctor, makeArrayRef(Args));
-        // Call std::terminate if ctor threw
-        EmitExceptionCheck(/*checkFlag=*/true, /*forceTerminate=*/true);
-        Builder.CreateBr(ContBlock);
+      Builder.CreateCall(Ctor, makeArrayRef(Args));
+      // Call std::terminate if ctor threw
+      EmitExceptionCheck(/*checkFlag=*/true, /*forceTerminate=*/true);
+      Builder.CreateBr(ContBlock);
 
-        // If missing ctor, treat as trivial
-        EmitBlock(ElseBlock);
+      // If missing ctor, treat as trivial
+      EmitBlock(ElseBlock);
+
+      if (!IsCatchAll) {
         auto size = getContext().getTypeSize(NCT.getTypePtr()) / 8;
         auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
         llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
         Address BufAddr(BufferRV.getScalarVal(), getNaturalTypeAlignment(getContext().CharTy));
         Builder.CreateMemCpy(ObjAddr, BufAddr, SizeVal, false);
-
-        EmitBlock(ContBlock);
       }
-      EmitAutoVarCleanups(CatchVar);
+      else {
+        Address BufAddr(BufferRV.getScalarVal(), getNaturalTypeAlignment(getContext().CharTy));
+        LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
+        RValue SizeRV = EmitLoadOfLValue(SizeLV, SourceLocation());
+        Builder.CreateMemCpy(ObjAddr, BufAddr, SizeRV.getScalarVal());
+      }
+      EmitBlock(ContBlock);
     }
-
 
     // Emit dtor for buffer
     {
-      assert(getContext().ExceptBufferDecl && "Missing declaration for __exception_obj_buffer");
-      {
-        auto *ExceptBufferDecl = getContext().ExceptBufferDecl;
+      LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
+      RValue BufferRV = EmitLoadOfLValue(BufferLV, SourceLocation());
 
-        DeclRefExpr BufferDR(ExceptBufferDecl, false,
-                        ExceptBufferDecl->getType(), VK_LValue, SourceLocation());
-        LValue BufferLV = EmitDeclRefLValue(&BufferDR);
+      llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
+      auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
+      LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
+      RValue DtorRV = EmitLoadOfLValue(DtorLV, SourceLocation());
+      llvm::Value *Dtor = DtorRV.getScalarVal();
+      llvm::Value *Val = Builder.CreateICmp(
+        llvm::CmpInst::ICMP_NE, Dtor, CP, "cmp");
 
-        llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
-        auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
-        LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
-        RValue DtorRV = EmitLoadOfLValue(DtorLV, SourceLocation());
-        llvm::Value *Dtor = DtorRV.getScalarVal();
-        llvm::Value *Val = Builder.CreateICmp(
-          llvm::CmpInst::ICMP_NE, Dtor, CP, "cmp");
+      llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
+      llvm::BasicBlock *ContBlock = createBasicBlock("if.cont");
 
-        llvm::BasicBlock *TrueBlock = createBasicBlock("if.then");
-        llvm::BasicBlock *ContBlock = createBasicBlock("if.cont");
-
-        Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
-        EmitBlock(TrueBlock);
-        llvm::Value *Args[] = {BufferLV.getPointer()};
-        Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().VoidPtrTy));
-        Builder.CreateCall(Dtor, makeArrayRef(Args));
-        // Dtors cannot throw - do not check for exception
-        EmitBlock(ContBlock);
-      }
+      Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
+      EmitBlock(TrueBlock);
+      llvm::Value *Args[] = {BufferRV.getScalarVal()};
+      Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().VoidPtrTy));
+      Builder.CreateCall(Dtor, makeArrayRef(Args));
+      // Exception object dtors cannot throw - do not check for exception
+      EmitBlock(ContBlock);
     }
 
+    // Emit catch body
     EmitBlock(createBasicBlock("Catch.Body"));
     EmitStmt(C->getHandlerBlock());
     CatchScope.ForceCleanup();

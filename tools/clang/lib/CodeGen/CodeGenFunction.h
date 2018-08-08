@@ -509,6 +509,8 @@ public:
     return CurrentFuncletPad && isa<llvm::CleanupPadInst>(CurrentFuncletPad);
   }
 
+  void PushCatchAllCleanup(llvm::Value *Dtor, Address VarAddr);
+
   /// pushFullExprCleanup - Push a cleanup to be run at the end of the
   /// current full-expression.  Safe against the possibility that
   /// we're currently inside a conditionally-evaluated expression.
