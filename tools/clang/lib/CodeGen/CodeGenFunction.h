@@ -1427,9 +1427,19 @@ private:
   bool WithinThrowingDtor();
   void DtorExitCheck();
   std::string nextExceptionIdentifier(const char* name);
+
+  void DestroyExceptionObject(llvm::Value*, QualType);
+  void DestroyExceptionObject(llvm::Value*, llvm::Value*);
+  void CopyExceptionObject(llvm::Value*, llvm::Value*, QualType, llvm::Value*);
+  void MoveExceptionObject(llvm::Value*, llvm::Value*, QualType, llvm::Value*);
+  void MoveExceptionObject(llvm::Value*, llvm::Value*, llvm::Value*, llvm::Value*,
+    llvm::Value*, llvm::Value*);
   
   llvm::Value *GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out);
   llvm::Value *GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_out);
+
+  CXXConstructorDecl *GetTypeCopyCtor(CXXRecordDecl *R, bool& Throws_Out);
+  CXXConstructorDecl *GetTypeMoveCtor(CXXRecordDecl *R, bool& Throws_Out);
 
   llvm::Value *CXXABIExceptValue{};
   llvm::Value *CXXExceptValue{};

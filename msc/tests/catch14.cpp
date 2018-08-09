@@ -1,4 +1,4 @@
-// expected: 2
+// expected: 1
 #include "stdexcept.hpp"
 
 int main()

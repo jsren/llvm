@@ -1476,7 +1476,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_get_exception_obj: {
     // Null if not using zc exceptions
     //if (!getLangOpts().ZCExceptions) {
-      llvm::Type *T = ConvertType(getContext().getExceptionParamType());
+      llvm::Type *T = ConvertType(getContext().getPointerType(getContext().getStdExceptionObjType()));
       return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
     /*}
 

@@ -51,62 +51,22 @@ static __exception_t __type_dummy;
 #include <memory>
 
 namespace std {
-    namespace __detail {
-        struct stacklocal_alloc {
-            unsigned char* ptr{};
-            stacklocal_alloc(unsigned char* ptr) noexcept : ptr(ptr) { }
-            unsigned char* allocate(decltype(sizeof(int)) size) noexcept {
-                return nullptr;
-            }
-            void deallocate(unsigned char*) noexcept {
-            }
-        };
-    }
-
-constexpr bool operator ==(const std::__detail::stacklocal_alloc&,
-    const std::__detail::stacklocal_alloc&) noexcept {
-    return true;
-}
-template<typename T>
-constexpr bool operator ==(const std::__detail::stacklocal_alloc&,
-    const T&) noexcept {
-    return false;
-}
-template<typename T>
-constexpr bool operator ==(const T&,
-    const std::__detail::stacklocal_alloc&) noexcept {
-    return false;
-}
-constexpr bool operator !=(const std::__detail::stacklocal_alloc&,
-    const std::__detail::stacklocal_alloc&) noexcept {
-    return false;
-}
-template<typename T>
-constexpr bool operator !=(const std::__detail::stacklocal_alloc&,
-    const T&) noexcept {
-    return true;
-}
-template<typename T>
-constexpr bool operator !=(const T&,
-    const std::__detail::stacklocal_alloc&) noexcept {
-    return true;
-}
-
 
     template<typename Alloc = allocator<unsigned char>>
     class exception_obj {
     public:
         using allocator = Alloc;
-        friend exception_obj<__detail::stacklocal_alloc>
+        friend exception_obj<Alloc>
             __make_exception_obj(unsigned char*) throws;
 
     private:
         allocator alloc;
         unsigned char* data{};
         __exception_t exception{};
+        bool stacklocal{};
 
-        exception_obj(const __exception_t* exception, allocator alloc) noexcept
-            : alloc(alloc), data(alloc.allocate(0)), exception(*exception) { }
+        exception_obj(const __exception_t* exception, unsigned char* data, allocator alloc) noexcept
+            : alloc(alloc), data(data), exception(*exception), stacklocal(true) { }
 
     public:
         exception_obj(exception_obj&& other) throws
@@ -122,14 +82,15 @@ constexpr bool operator !=(const T&,
         {
             // If stack-allocated within catch block, re-alloc using allocator
             // Or if allocators differ, move between allocators
-            if (alloc != other.alloc) {
+            if (alloc != other.alloc || other.stacklocal) {
                 // TODO: adjust alignment
                 alloc.allocate(other.exception.size + other.exception.alignment);
                 exception.ctor(data, const_cast<__exception_t*>(__builtin_get_exception()), other.data);
                 exception.dtor(other.data);
 
-                if (alloc != other.alloc) {
-                    other.alloc.deallocate(other.data);
+                if (!other.stacklocal) {
+                    other.alloc.deallocate(other.data,
+                        other.exception.size + other.exception.alignment);
                 }
             }
             // Otherwise just pass memory around
@@ -138,17 +99,17 @@ constexpr bool operator !=(const T&,
 
         ~exception_obj() noexcept
         {
-            if (data != nullptr) {
+            if (!stacklocal && data != nullptr) {
                 exception.dtor(data);
-                try { alloc.deallocate(data); }
+                try { alloc.deallocate(data, exception.size + exception.alignment); }
                 catch (...) { }
             }
         }
     };
 
-    using __exception_obj_t = std::exception_obj<std::__detail::stacklocal_alloc>;
+    using __exception_obj_t = std::exception_obj<>;
     __exception_obj_t __make_exception_obj(unsigned char* obj) throws {
-        return __exception_obj_t(__builtin_get_exception(), __detail::stacklocal_alloc(obj));
+        return __exception_obj_t(__builtin_get_exception(), obj, allocator<unsigned char>());
     }
 
 }

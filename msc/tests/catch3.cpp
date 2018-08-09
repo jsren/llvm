@@ -4,6 +4,10 @@
 int main()
 {
     test_setup();
+
+    EmptyObj o{};
+    EmptyObj o2{static_cast<EmptyObj&&>(o)};
+
     try {
         throw 0;
     }
