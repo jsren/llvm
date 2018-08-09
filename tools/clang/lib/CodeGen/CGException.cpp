@@ -1143,31 +1143,13 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       }
 
       EmitBlock(TrueBlock);
+
       // Jump to next catch handler if one present
       if (NextBlock != nullptr) {
           Builder.CreateBr(NextBlock);
       }
-      // Emit goto outer catch handler if one present
-      else if (catchHandlerBlockStack.size() > 0) {
-        // Throw within catch requires sync w/ local copy
-        MaybeCopyBackExceptionState();
-        // Dtors cannot throw, thus we can call using 'throwing' state
-        EmitBranchThroughCleanup(catchHandlerBlockStack.back());
-      }
-      // Otherwise return empty
-      else {
-        // Check for exit-with-exception if within throwing destructor
-        DtorExitCheck();
-        // Throw within try/catch requires sync w/ local copy
-        MaybeCopyBackExceptionState();
-
-        Expr *e = new (getContext()) CallExpr (getContext(),
-          Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
-        e->setEmpty(true);
-        ReturnStmt *RT = new (getContext()) ReturnStmt(
-          SourceLocation(), e, nullptr);
-        EmitReturnStmt(*RT);
-      }
+      // Otherwise propagate
+      else EmitExceptionCheck(/*checkFlag=*/false);
 
       EmitBlock(ContBlock);
     }
@@ -1345,6 +1327,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       assert(HaveInsertPoint());
       LValue ActiveLV = EmitLValueForField(EStateLV, getContext().ExceptMbrActive);
       EmitStoreThroughLValue(RValue::get(Builder.getTrue()), ActiveLV);
+      MaybeCopyBackExceptionState();
     }
 
     // Jump to end
