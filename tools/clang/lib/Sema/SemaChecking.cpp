@@ -1274,6 +1274,15 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     TheCall->setObjectKind(ExprObjectKind::OK_Ordinary);
     break;
   }
+  case Builtin::BI__builtin_get_exception_obj: {
+    assert(RethrowMarkers.size() != 0 && "Cannot get exception object outwith catch block.");
+    QualType QT = Context.getStdExceptionObjType();
+    QT = Context.getPointerType(QT);
+    TheCall->setType(QT);
+    TheCall->setValueKind(ExprValueKind::VK_RValue);
+    TheCall->setObjectKind(ExprObjectKind::OK_Ordinary);
+    RethrowMarkers.back() = true;
+  }
   case Builtin::BI__builtin_throw: {
     if (checkArgCount(*this, TheCall, 1))
       return ExprError();

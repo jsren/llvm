@@ -3823,9 +3823,11 @@ Sema::ActOnObjCAtSynchronizedStmt(SourceLocation AtLoc, Expr *SyncExpr,
 StmtResult
 Sema::ActOnCXXCatchBlock(SourceLocation CatchLoc, Decl *ExDecl,
                          Stmt *HandlerBlock) {
+  bool hasRethrow = RethrowMarkers.back();
+  RethrowMarkers.pop_back();
   // There's nothing to test that ActOnExceptionDecl didn't already test.
   return new (Context)
-      CXXCatchStmt(CatchLoc, cast_or_null<VarDecl>(ExDecl), HandlerBlock);
+      CXXCatchStmt(CatchLoc, cast_or_null<VarDecl>(ExDecl), HandlerBlock, hasRethrow);
 }
 
 StmtResult

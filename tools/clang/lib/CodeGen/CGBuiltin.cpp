@@ -1457,6 +1457,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   switch (BuiltinID) {
   default: break;
   case Builtin::BI__builtin_get_exception: {
+    // Null if not using zc exceptions
+    if (!getLangOpts().ZCExceptions) {
+      llvm::Type *T = ConvertType(getContext().getExceptionParamType());
+      return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
+    }
+
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
     Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
@@ -1466,6 +1472,25 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
     return RValue::get(BaseLV.getPointer());
+  }
+  case Builtin::BI__builtin_get_exception_obj: {
+    // Null if not using zc exceptions
+    //if (!getLangOpts().ZCExceptions) {
+      llvm::Type *T = ConvertType(getContext().getExceptionParamType());
+      return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
+    /*}
+
+    TODO
+
+    LValueBaseInfo BaseInfo;
+    TBAAAccessInfo TBAAInfo;
+    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+
+    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
+    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+
+    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+    return RValue::get(BaseLV.getPointer());*/
   }
   case Builtin::BI__builtin_try: {
     // Create label decl

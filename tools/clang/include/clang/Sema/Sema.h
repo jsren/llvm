@@ -348,6 +348,9 @@ public:
   /// Stack of active SEH __finally scopes.  Can be empty.
   SmallVector<Scope*, 2> CurrentSEHFinally;
 
+  /// Stack of rethrow markers. Can be empty.
+  SmallVector<bool, 2> RethrowMarkers;
+
   /// Source location for newly created implicit MSInheritanceAttrs
   SourceLocation ImplicitMSInheritanceAttrLoc;
 

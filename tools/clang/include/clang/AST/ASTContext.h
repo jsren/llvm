@@ -351,6 +351,7 @@ private:
   // The type for the C++ __exception_t type.
   public:
   TypeDecl *ExceptObjType = nullptr;
+  TypeDecl *StdExceptObjType = nullptr;
   FieldDecl *ExceptMbrActive = nullptr;
   FieldDecl *ExceptMbrSize = nullptr;
   FieldDecl *ExceptMbrAlign = nullptr;
@@ -1530,6 +1531,7 @@ public:
 
   QualType getExceptionObjectType() const;
   QualType getExceptionParamType() const;
+  QualType getStdExceptionObjType() const;
 
   /// Return the unique reference to the type for the specified TagDecl
   /// (struct/union/class/enum) decl.

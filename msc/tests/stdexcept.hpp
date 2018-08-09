@@ -48,6 +48,118 @@ struct __exception_t {
 };
 static __exception_t __type_dummy;
 
+#include <memory>
+
+namespace std {
+    namespace __detail {
+        struct stacklocal_alloc {
+            unsigned char* ptr{};
+            stacklocal_alloc(unsigned char* ptr) noexcept : ptr(ptr) { }
+            unsigned char* allocate(decltype(sizeof(int)) size) noexcept {
+                return nullptr;
+            }
+            void deallocate(unsigned char*) noexcept {
+            }
+        };
+    }
+
+constexpr bool operator ==(const std::__detail::stacklocal_alloc&,
+    const std::__detail::stacklocal_alloc&) noexcept {
+    return true;
+}
+template<typename T>
+constexpr bool operator ==(const std::__detail::stacklocal_alloc&,
+    const T&) noexcept {
+    return false;
+}
+template<typename T>
+constexpr bool operator ==(const T&,
+    const std::__detail::stacklocal_alloc&) noexcept {
+    return false;
+}
+constexpr bool operator !=(const std::__detail::stacklocal_alloc&,
+    const std::__detail::stacklocal_alloc&) noexcept {
+    return false;
+}
+template<typename T>
+constexpr bool operator !=(const std::__detail::stacklocal_alloc&,
+    const T&) noexcept {
+    return true;
+}
+template<typename T>
+constexpr bool operator !=(const T&,
+    const std::__detail::stacklocal_alloc&) noexcept {
+    return true;
+}
+
+
+    template<typename Alloc = allocator<unsigned char>>
+    class exception_obj {
+    public:
+        using allocator = Alloc;
+        friend exception_obj<__detail::stacklocal_alloc>
+            __make_exception_obj(unsigned char*) throws;
+
+    private:
+        allocator alloc;
+        unsigned char* data{};
+        __exception_t exception{};
+
+        exception_obj(const __exception_t* exception, allocator alloc) noexcept
+            : alloc(alloc), data(alloc.allocate(0)), exception(*exception) { }
+
+    public:
+        exception_obj(exception_obj&& other) throws
+            : exception_obj(std::move(other), other.alloc) { }
+
+        template<typename A>
+        exception_obj(exception_obj<A>&& other) throws
+            : exception_obj(std::move(other), allocator{}) { }
+
+        template<typename A>
+        exception_obj(exception_obj<A>&& other, allocator alloc) throws
+            : alloc(alloc), data(other.data), exception(other.exception)
+        {
+            // If stack-allocated within catch block, re-alloc using allocator
+            // Or if allocators differ, move between allocators
+            if (alloc != other.alloc) {
+                // TODO: adjust alignment
+                alloc.allocate(other.exception.size + other.exception.alignment);
+                exception.ctor(data, const_cast<__exception_t*>(__builtin_get_exception()), other.data);
+                exception.dtor(other.data);
+
+                if (alloc != other.alloc) {
+                    other.alloc.deallocate(other.data);
+                }
+            }
+            // Otherwise just pass memory around
+            else other.data = nullptr;
+        }
+
+        ~exception_obj() noexcept
+        {
+            if (data != nullptr) {
+                exception.dtor(data);
+                try { alloc.deallocate(data); }
+                catch (...) { }
+            }
+        }
+    };
+
+    using __exception_obj_t = std::exception_obj<std::__detail::stacklocal_alloc>;
+    __exception_obj_t __make_exception_obj(unsigned char* obj) throws {
+        return __exception_obj_t(__builtin_get_exception(), __detail::stacklocal_alloc(obj));
+    }
+
+}
+
+using __exception_obj_t = std::__exception_obj_t;
+
+__exception_obj_t __make_exception_obj(unsigned char* obj) throws {
+    return std::__make_exception_obj(obj);
+}
+
+
 static_assert(std::is_trivially_copyable<__exception_t>::value,"");
 static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
@@ -103,27 +215,6 @@ extern "C" {
         nullptr
     };
 
-    /*struct [[gnu::packed]] __tinfo_entry_t {
-        void* base;
-        void* derived;
-    };
-
-    [[gnu::section(".tinfo"), gnu::used]]
-    alignas(sizeof(void*))
-    static __tinfo_entry_t __tinfo[] = {
-        __tinfo_entry_t{&__typeid_for_BaseObj, &__typeid_for_SuperObj}
-    };*/
-
-    /*extern const char __tinfo_start;
-    extern const char __tinfo_end;*/
-
-    /*[[gnu::noinline]]
-    static bool __type_is_not_base(void* base, void* super) noexcept {
-        for (auto* e = reinterpret_cast<const __tinfo_entry_t*>(&__tinfo_start); e < (void*)&__tinfo_end; e++) {
-            if (e->base == base && e->derived == super) return false;
-        }
-        return true;
-    }*/
     [[gnu::noinline]]
     static bool __type_is_not_base(void* type, const char** super_bases) noexcept {
         for (; super_bases[0] != nullptr; super_bases++) {
@@ -209,6 +300,7 @@ struct SuperObj : BaseObj {
     }
     SuperObj() = default;
     SuperObj(SuperObj&&) = default;
+    SuperObj(const SuperObj&) = default;
 };
 struct DtorTestObj {
     int& i;

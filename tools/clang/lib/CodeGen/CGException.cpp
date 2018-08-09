@@ -1037,6 +1037,10 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     EHCatchScope::Handler& Handler = Handlers[I];
     llvm::BasicBlock *NextBlock = (I != (NumHandlers-1) ? Handlers[I+1].Block : nullptr);
 
+    if (C->hasRethrow()) {
+      std::printf("This catch block has rethrow.\n");
+    }
+
     QualType CT = C->getCaughtType();
     QualType NCT = CT;
     bool IsCatchAll = (CT == QualType());

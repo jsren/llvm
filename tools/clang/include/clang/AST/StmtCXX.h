@@ -33,11 +33,12 @@ class CXXCatchStmt : public Stmt {
   mutable VarDecl *ObjDecl;
   /// The handler block.
   Stmt *HandlerBlock;
+  bool HasRethrow{};
 
 public:
-  CXXCatchStmt(SourceLocation catchLoc, VarDecl *exDecl, Stmt *handlerBlock)
+  CXXCatchStmt(SourceLocation catchLoc, VarDecl *exDecl, Stmt *handlerBlock, bool hasRethrow = false)
   : Stmt(CXXCatchStmtClass), CatchLoc(catchLoc), ExceptionDecl(exDecl),
-    HandlerBlock(handlerBlock) {}
+    HandlerBlock(handlerBlock), HasRethrow(hasRethrow) {}
 
   CXXCatchStmt(EmptyShell Empty)
   : Stmt(CXXCatchStmtClass), ExceptionDecl(nullptr), HandlerBlock(nullptr) {}
@@ -59,6 +60,7 @@ public:
   }
 
   child_range children() { return child_range(&HandlerBlock, &HandlerBlock+1); }
+  bool hasRethrow() const { return HasRethrow; }
 
   friend class ASTStmtReader;
 };
