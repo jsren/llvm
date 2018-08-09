@@ -1550,7 +1550,10 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
 #include <regex>
 
 VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
+  Qualifiers _;
+  T = getContext().getUnqualifiedArrayType(T, _);
   T = T.getCanonicalType();
+
   // If pointer type or has no base types, just assign empty
   std::string idName = "__typeid_empty_bases";
 
@@ -1563,9 +1566,9 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
 
   // If not pointer type or inheritless class
   if (!T1->isPointerType() && hasBases != 0) {
-    std::string Name = QualType::getAsString(T.split(),
+    std::string Name = QualType::getAsString(T1.split(),
       getContext().getPrintingPolicy());
-    std::replace(Name.begin(), Name.end(), ' ', '_');
+    Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
     idName = "__typeid_bases_for_" + Name;
   }
 
@@ -1593,8 +1596,19 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
   return Decl;
 }  
 
+static QualType StripAllQualifiers(ASTContext &ctx, QualType T)
+{
+  Qualifiers _;
+  T = ctx.getUnqualifiedArrayType(T, _);
+  if (T->isPointerType() && !T->isNullPtrType()) {
+    auto PT = StripAllQualifiers(ctx, T->getPointeeType());
+    return ctx.getPointerType(PT);
+  }
+  return T;
+}
+
 VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
-  T = T.getCanonicalType();
+  T = StripAllQualifiers(getContext(), T);
 
   std::string Name = QualType::getAsString(T.split(),
     getContext().getPrintingPolicy());

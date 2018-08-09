@@ -85,7 +85,11 @@ extern "C" {
     [[gnu::weak]] alignas(1)
         char __typeid_for_BaseObj = 0;
     [[gnu::weak]] alignas(1)
+        char __typeid_for_1BaseObj = 0;
+    [[gnu::weak]] alignas(1)
         char __typeid_for_SuperObj = 0;
+    [[gnu::weak]] alignas(1)
+        char __typeid_for_1SuperObj = 0;
     [[gnu::weak]] alignas(1)
         char __typeid_for_DtorTestObj = 0;
 
