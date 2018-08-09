@@ -1554,11 +1554,15 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
   // If pointer type or has no base types, just assign empty
   std::string idName = "__typeid_empty_bases";
 
-  const CXXRecordDecl *RD = T.getTypePtr()->getAsCXXRecordDecl();
+  // If pointer-to-T, get bases for pointee type
+  bool ptrToT = T->isPointerType() && !T->isNullPtrType();
+  QualType T1 = ptrToT ? T->getPointeeType().getCanonicalType() : T;
+
+  const CXXRecordDecl *RD = T1.getTypePtr()->getAsCXXRecordDecl();
   bool hasBases = RD && RD->getNumBases();
 
   // If not pointer type or inheritless class
-  if (!T->isPointerType() && hasBases != 0) {
+  if (!T1->isPointerType() && hasBases != 0) {
     std::string Name = QualType::getAsString(T.split(),
       getContext().getPrintingPolicy());
     std::replace(Name.begin(), Name.end(), ' ', '_');
@@ -1567,8 +1571,7 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
 
   const char* CName = idName.c_str();
   IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
-  auto CT = //getContext().getPointerType(
-    getContext().getPointerType(getContext().CharTy); //);
+  auto CT = getContext().getPointerType(getContext().CharTy);
   
   // Get file context
   DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
@@ -1596,10 +1599,10 @@ VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
   std::string Name = QualType::getAsString(T.split(),
     getContext().getPrintingPolicy());
 
-  std::replace(Name.begin(), Name.end(), ' ', '_');
-  Name = std::regex_replace(Name, std::regex("\\*"), "__ptr");
-
-  Name = "__typeid_for_" + Name;
+  auto count = std::count(Name.begin(), Name.end(), '*');
+  Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
+  Name = "__typeid_for_" + (count != 0 ?
+    std::to_string(count) : std::string()) + Name;
   const char* CName = Name.c_str();
 
   IdentifierInfo* II = &CGM.getContext().Idents.get(CName);

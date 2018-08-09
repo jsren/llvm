@@ -57,7 +57,7 @@ extern "C" {
     [[gnu::weak]] alignas(1)
         char __typeid_for_int = 0;
     [[gnu::weak]] alignas(1)
-        char __typeid_for_int___ptr = 0;
+        char __typeid_for_1int = 0;
     [[gnu::weak]] alignas(1)
         char __typeid_for_bool = 0;
     [[gnu::weak]] alignas(1)

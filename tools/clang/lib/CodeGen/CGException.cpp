@@ -1200,8 +1200,6 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       RValue DtorRV = EmitLoadOfLValue(DtorLV, SourceLocation());
       llvm::Value *Dtor = DtorRV.getScalarVal();
 
-      // Push cleanup for catch-all object
-      PushCatchAllCleanup(Dtor, VarAddr);
       // Save the stack to clean up object vla
       if (!DidCallStackSave) {
         Address Stack =
@@ -1217,6 +1215,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         // FIXME: in general circumstances, this should be an EH cleanup.
         pushStackRestore(NormalCleanup, Stack);
       }
+      // Push cleanup for catch-all object
+      PushCatchAllCleanup(Dtor, VarAddr);
     }
     else
     {
