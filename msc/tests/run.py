@@ -5,7 +5,7 @@ import subprocess
 from typing import List, Tuple, Any, Union
 
 compiler = "/source/build-llvm/bin/clang++"
-default_args = [compiler, '-Wno-everything', '-g', '-std=c++14', '-Xlinker', '-Tlink.ld']
+default_args = [compiler, '-Wno-everything', '-g', '-std=c++14']
 variant_args = [('-fzcexceptions', '-fexceptions'), ('-O0', '-O3')]
 
 def split_alpha_num(s) -> Tuple[Union[str, int]]:
