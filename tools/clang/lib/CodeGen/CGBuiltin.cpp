@@ -1479,20 +1479,18 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       EmitCXXThrowExpr(&TE);
     }
 
-    LValue ObjLV = EmitLValue(E->getArg(0));
+    //LValue ObjLV = EmitLValue(E->getArg(0));
+    RValue ObjRV = EmitAnyExpr(E->getArg(0));
+    LValue BaseLV = MakeNaturalAlignAddrLValue(ObjRV.getScalarVal(),
+      getContext().getExceptionObjBaseType());
+
     QualType QT = getContext().getPointerType(getContext().getExceptionObjBaseType());
     auto PtrTy = QT->castAs<PointerType>();
 
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = EmitLoadOfPointer(ObjLV.getAddress(), PtrTy, &BaseInfo, &TBAAInfo);
-    LValue BaseLV = MakeAddrLValue(PtrAddr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
-    LValue DataLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrData);
     LValue EStateLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
-    llvm::Value *DataVal = EmitLoadOfLValue(DataLV, SourceLocation()).getScalarVal();
-
-    // Move object back to buffer
     LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
     auto MbrBuffer = EmitLoadOfLValue(BufferLV, SourceLocation()).getScalarVal();
     LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
@@ -1506,7 +1504,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptAllocFunc);
     llvm::Value* res = Builder.CreateCall(FP, { MbrSize, MbrAlign });
 
-    MoveExceptionObject(DataVal, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
+    // Move object back to buffer
+    MoveExceptionObject(MbrBuffer, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
+    // Update address in exception state
+    EmitStoreThroughLValue(RValue::get(res), BufferLV);
 
     // Copy exception state
     Address DstPtrAddr = GetAddrOfLocalVar(curExceptDecl());

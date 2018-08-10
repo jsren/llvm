@@ -1452,15 +1452,17 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 
       // Initialse 'data' variable to point to object
       LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), Ctx.getExceptionParamType());
-      LValue LV1 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrData);
-      llvm::Value *Ptr = Builder.CreateBitCast(ObjAddr.getPointer(),
-        ConvertType(getContext().ExceptBaseMbrData->getType()));
-      EmitStoreThroughLValue(RValue::get(Ptr), LV1);
       LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
+
       auto Size = getContext().getTypeSize(
         getContext().getExceptionObjectType().getTypePtr()) / 8;
-
       Builder.CreateMemCpy(LV2.getAddress(), EStateLV.getAddress(), Size);
+
+      // Store local object address into 'buffer' field of exception state
+      LValue BufferLV = EmitLValueForField(LV2, getContext().ExceptMbrBuffer);
+      llvm::Value *Ptr = Builder.CreateBitCast(ObjAddr.getPointer(),
+        ConvertType(getContext().ExceptMbrBuffer->getType()));
+      EmitStoreThroughLValue(RValue::get(Ptr), BufferLV);
 
       CXXABIExceptObjDeclStack.push_back(VarObj);
       EmitAutoVarCleanups(Obj);

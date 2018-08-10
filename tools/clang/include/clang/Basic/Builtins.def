@@ -534,7 +534,7 @@ BUILTIN(__builtin_try, "v", "n")
 BUILTIN(__builtin_catch, "v", "n")
 BUILTIN(__builtin_catch_end, "v", "n")
 BUILTIN(__builtin_get_exception, "v", "nt")
-BUILTIN(__builtin_get_exception_obj, "v", "nt")
+BUILTIN(__builtin_get_exception_obj, "v.", "nt")
 BUILTIN(__builtin_rethrow, "v.", "nt")
 
 // "Overloaded" Atomic operator builtins.  These are overloaded to support data

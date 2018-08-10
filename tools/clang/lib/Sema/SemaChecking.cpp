@@ -1279,7 +1279,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (checkArgCount(*this, TheCall, 1))
       return ExprError();
     // Ensure that the first argument is of type 'struct XX *'
-    const QualType PtrArgType = TheCall->getArg(0)->getType();
+    const QualType PtrArgType = TheCall->getArg(0)->getType().getCanonicalType();
     assert(PtrArgType.getTypePtr() == Context.getPointerType(
       Context.getExceptionObjBaseType()).getTypePtr());
     break;

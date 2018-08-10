@@ -1,3 +1,4 @@
+/* stdexcept.hpp - (c) 2018 James Renwick */
 #pragma once
 #include <type_traits>
 #include <cstdlib>
@@ -46,26 +47,29 @@ struct __exception_t {
     // Alignment of exception object
     char alignment;
 };
+// Force Clang to emit ctor/dtor definitions
+// TODO: Automatically mark as 'used', removing need for this variable
 static __exception_t __type_dummy;
+
+static_assert(std::is_trivially_copyable<__exception_t>::value,"");
+static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
 
 class __exception_obj_base {
-    unsigned char* data{};
     __exception_t exception{};
 
 protected:
     constexpr __exception_obj_base(unsigned char* c, __exception_t e) noexcept
-        : data(c), exception(e) { }
+        : exception(e) { exception.buffer = c; }
 public:
     __exception_obj_base() = default;
     __exception_obj_base(const __exception_obj_base&) = default;
     virtual ~__exception_obj_base() = default;
 };
+// Force Clang to emit ctor/dtor definitions
+// TODO: Automatically mark as 'used', removing need for this variable
 static __exception_obj_base __type_dummy2;
 
-
-static_assert(std::is_trivially_copyable<__exception_t>::value,"");
-static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
 extern "C" {
     [[gnu::weak]] alignas(1)
@@ -194,6 +198,7 @@ struct DtorThrowsObj {
     ~DtorThrowsObj() throws { throw i; }
 };
 struct BaseObj {
+    int i = 2;
     virtual int value() const {
         return 1;
     }
@@ -213,37 +218,6 @@ struct DtorTestObj {
     DtorTestObj(const DtorTestObj&) = default;
     ~DtorTestObj() { i++; }
 };
-
-namespace std
-{
-    using type_id = void*;
-
-    class exception_info
-    {
-        void(*dtor)(void*);
-        type_id type;
-
-    public:
-        exception_info() throws {
-            const __exception_t* e = __builtin_get_exception();
-            dtor = e->dtor;
-            type = e->type;
-        }
-
-    public:
-        exception_info(const exception_info&) = default;
-
-        inline type_id get_typeid() const {
-            return type;
-        }
-
-        inline void destroy_obj() {
-            if (dtor) {
-                dtor(__exception_obj_buffer);
-            }
-        }
-    };
-}
 
 #include <exception>
 #include <cstdlib>

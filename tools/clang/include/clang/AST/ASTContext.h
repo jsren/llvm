@@ -366,7 +366,6 @@ private:
   TypeDecl *StdExceptObjType = nullptr;
 
   TypeDecl *ExceptObjBaseType = nullptr;
-  FieldDecl *ExceptBaseMbrData = nullptr;
   FieldDecl *ExceptBaseMbrException = nullptr;
 
   private:

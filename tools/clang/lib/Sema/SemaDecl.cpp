@@ -14582,15 +14582,11 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
 
     for (FieldDecl* field : RD->fields()) {
       auto name = field->getName().str();
-      if (name == "data") {
-        C.ExceptBaseMbrData = field;
-      }
       if (name == "exception") {
         C.ExceptBaseMbrException = field;
       }
     }
-    assert(C.ExceptBaseMbrData
-      && C.ExceptBaseMbrException
+    assert(C.ExceptBaseMbrException
       && "__exception_obj_base missing required field.");
   }
 

@@ -1,3 +1,4 @@
+/* rethrow.hpp - (c) 2018 James Renwick */
 #pragma once
 #include <memory>
 #include "stdexcept.hpp"
@@ -5,7 +6,7 @@
 namespace std
 {
     template<typename Alloc = allocator<unsigned char>>
-    class exception_obj final : public exception_obj_base {
+    class exception_obj final : public __exception_obj_base {
     public:
         using allocator = Alloc;
         friend exception_obj<Alloc>
@@ -16,7 +17,7 @@ namespace std
         bool stacklocal{};
 
         constexpr exception_obj(const __exception_obj_base* base, allocator alloc) noexcept
-                : exception_obj_base(*base), alloc(alloc), stacklocal(true) { }
+                : __exception_obj_base(*base), alloc(alloc), stacklocal(true) { }
 
     public:
         exception_obj(exception_obj&& other) throws
@@ -28,7 +29,7 @@ namespace std
 
         template<typename A>
         exception_obj(exception_obj<A>&& other, allocator alloc) throws
-            : exception_obj_base(other), alloc(alloc)
+            : __exception_obj_base(other), alloc(alloc)
         {
             // If stack-allocated within catch block, re-alloc using allocator
             // Or if allocators differ, move between allocators
