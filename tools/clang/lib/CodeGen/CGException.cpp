@@ -1334,12 +1334,14 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       EmitStoreThroughLValue(RValue::get(Builder.getFalse()), ActiveLV);
     }
 
-    llvm::Value *MbrBuffer, *MbrSize, *MbrCtor, *MbrDtor;
+    llvm::Value *MbrBuffer, *MbrSize, *MbrAlign, *MbrCtor, *MbrDtor;
     {
       LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
       MbrBuffer = EmitLoadOfLValue(BufferLV, SourceLocation()).getScalarVal();
       LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
       MbrSize = EmitLoadOfLValue(SizeLV, SourceLocation()).getScalarVal();
+      LValue AlignLV = EmitLValueForField(EStateLV, getContext().ExceptMbrAlign);
+      MbrAlign = EmitLoadOfLValue(AlignLV, SourceLocation()).getScalarVal();
       LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
       MbrCtor = EmitLoadOfLValue(CtorLV, SourceLocation()).getScalarVal();
       LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
@@ -1442,6 +1444,12 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       }
     }
 
+    // De-allocate exception from buffer
+    {
+      llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptFreeFunc);
+      Builder.CreateCall(FP, { MbrBuffer, MbrSize, MbrAlign });
+    }
+
     if (C->hasRethrow()) {
       auto Loc = C->getCatchLoc();
       ASTContext& Ctx = getContext();
@@ -1450,7 +1458,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
             Loc, Loc, IIObj, Ctx.getExceptionObjBaseType(), nullptr, SC_Auto);
       auto Obj = EmitAutoVarAlloca(*VarObj);
 
-      // Initialse 'data' variable to point to object
+      // Copy existing exception state into exception_obj instance
       LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), Ctx.getExceptionParamType());
       LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
 

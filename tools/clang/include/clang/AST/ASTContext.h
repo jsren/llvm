@@ -363,6 +363,7 @@ private:
   VarDecl *ExceptBufferDecl = nullptr;
   FunctionDecl *ExceptInheritanceFunc = nullptr;
   FunctionDecl *ExceptAllocFunc = nullptr;
+  FunctionDecl *ExceptFreeFunc = nullptr;
   TypeDecl *StdExceptObjType = nullptr;
 
   TypeDecl *ExceptObjBaseType = nullptr;

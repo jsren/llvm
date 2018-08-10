@@ -23,10 +23,11 @@ inline unsigned char* __cxa_allocate_exception_obj(
     return out;
 }
 
-inline void __cxa_free_exception_obj(unsigned char* ptr, char alignment) noexcept {
+inline void __cxa_free_exception_obj(unsigned char* ptr, decltype(sizeof(int)) size, char alignment) noexcept {
     if (ptr < __exception_obj_buffer || ptr > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
         ::operator delete[](ptr/*, (std::align_val_t)alignment*/);
     }
+    __exception_obj_ptr -= size;
 }
 
 struct __exception_t {

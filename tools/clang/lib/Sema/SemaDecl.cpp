@@ -9191,6 +9191,9 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     else if (II->isStr("__cxa_allocate_exception_obj")) {
       Context.ExceptAllocFunc = NewFD;
     }
+    else if (II->isStr("__cxa_free_exception_obj")) {
+      Context.ExceptFreeFunc = NewFD;
+    }
   }
   return NewFD;
 }
