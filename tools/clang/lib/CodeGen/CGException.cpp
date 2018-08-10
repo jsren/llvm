@@ -960,6 +960,8 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     // Assign object size
     LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrSize);
     EmitStoreThroughLValue(RValue::get(SizeVal), LV);
+    LValue LV9 = EmitLValueForField(BaseLV, getContext().ExceptMbrAlign);
+    EmitStoreThroughLValue(RValue::get(AlignVal), LV9);
 
     // Get name of type-id to reference
     VarDecl *TIDDecl = VarDeclForTypeID(ObjType);
@@ -1176,7 +1178,9 @@ void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
 
   // Destroy original
   EmitBlock(ContBlock);
-  DestroyExceptionObject(Src, Dtor);
+  if (Dtor != nullptr) {
+    DestroyExceptionObject(Src, Dtor);
+  }
 }
 
 void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
@@ -1206,10 +1210,6 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     const CXXCatchStmt *C = S.getHandler(I);
     EHCatchScope::Handler& Handler = Handlers[I];
     llvm::BasicBlock *NextBlock = (I != (NumHandlers-1) ? Handlers[I+1].Block : nullptr);
-
-    if (C->hasRethrow()) {
-      std::printf("This catch block has rethrow.\n");
-    }
 
     QualType CT = C->getCaughtType();
     QualType NCT = CT;
@@ -1368,7 +1368,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       CharUnits MaxAlign = CGM.getContext().toCharUnitsFromBits(
         CGM.getContext().getTargetInfo().getSuitableAlign());
     
-      VLAAddr = CreateTempAlloca(Builder.getInt8Ty(), MaxAlign,
+      ObjAddr = VLAAddr = CreateTempAlloca(Builder.getInt8Ty(), MaxAlign,
         "__exception_obj_vla", MbrSize);
 
       // Save the stack to de-alloc VLA
@@ -1386,7 +1386,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         pushStackRestore(NormalCleanup, Stack);
       }
       // Push cleanup for VLA object
-      PushCatchAllCleanup(MbrDtor, VLAAddr);
+      //PushCatchAllCleanup(MbrDtor, VLAAddr);
       // Initialise with original object
       MoveExceptionObject(MbrBuffer, VLAAddr.getPointer(),
         MbrCtor, MbrDtor, MbrSize, EStateVal);
@@ -1443,10 +1443,37 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       }
     }
 
+    if (C->hasRethrow()) {
+      std::printf("This catch block has rethrow.\n");
+      auto Loc = C->getCatchLoc();
+
+      ASTContext& Ctx = getContext();
+      IdentifierInfo* IIObj = &Ctx.Idents.get(nextExceptionIdentifier("__exception_obj_t"));
+      auto VarObj = VarDecl::Create(Ctx, const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
+            Loc, Loc, IIObj, Ctx.getExceptionObjBaseType(), nullptr, SC_Auto);
+      auto Obj = EmitAutoVarAlloca(*VarObj);
+
+      // Initialse 'data' variable to point to object
+      LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), Ctx.getExceptionParamType());
+      LValue LV1 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrData);
+      llvm::Value *Ptr = Builder.CreateBitCast(ObjAddr.getPointer(),
+        ConvertType(getContext().ExceptBaseMbrData->getType()));
+      EmitStoreThroughLValue(RValue::get(Ptr), LV1);
+      LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
+      RValue EStateRV = EmitLoadOfLValue(EStateLV, SourceLocation());
+      EmitStoreThroughLValue(EStateRV, LV2);
+
+      CXXABIExceptObjDeclStack.push_back(VarObj);
+    }
+
     // Emit catch body
     EmitBlock(createBasicBlock("Catch.Body"));
     EmitStmt(C->getHandlerBlock());
     CatchScope.ForceCleanup();
+
+    if (C->hasRethrow()) {
+      CXXABIExceptObjDeclStack.pop_back();
+    }
 
     // Re-throw for function-try blocks
     if (IsFnTryBlock)

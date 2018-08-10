@@ -1274,10 +1274,21 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     TheCall->setObjectKind(ExprObjectKind::OK_Ordinary);
     break;
   }
+  case Builtin::BI__builtin_rethrow: {
+    // We first want to ensure we are called with 2 arguments
+    if (checkArgCount(*this, TheCall, 1))
+      return ExprError();
+    // Ensure that the first argument is of type 'struct XX *'
+    const QualType PtrArgType = TheCall->getArg(0)->getType();
+    assert(PtrArgType.getTypePtr() == Context.getPointerType(
+      Context.getExceptionObjBaseType()).getTypePtr());
+    break;
+  }
   case Builtin::BI__builtin_get_exception_obj: {
     assert(RethrowMarkers.size() != 0 && "Cannot get exception object outwith catch block.");
-    QualType QT = Context.getStdExceptionObjType();
+    QualType QT = Context.getExceptionObjBaseType();
     QT = Context.getPointerType(QT);
+    QT.addConst();
     TheCall->setType(QT);
     TheCall->setValueKind(ExprValueKind::VK_RValue);
     TheCall->setObjectKind(ExprObjectKind::OK_Ordinary);

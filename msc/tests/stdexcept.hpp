@@ -37,88 +37,30 @@ struct __exception_t {
     void* type;
     // Size of exception object
     decltype(sizeof(int)) size;
-    // Alignment of exception object
-    char alignment;
     // If the original ctor is not 'throws', we will emit and assign a thunk instead
     // TODO: support VTT pointer
     void(*ctor)(void*, __exception_t*, void*); 
     void(*dtor)(void*);
     bool active;
     bool ptr;
+    // Alignment of exception object
+    char alignment;
 };
 static __exception_t __type_dummy;
 
-#include <memory>
 
-namespace std {
+class __exception_obj_base {
+    unsigned char* data{};
+    __exception_t exception{};
 
-    template<typename Alloc = allocator<unsigned char>>
-    class exception_obj {
-    public:
-        using allocator = Alloc;
-        friend exception_obj<Alloc>
-            __make_exception_obj(unsigned char*) throws;
-
-    private:
-        allocator alloc;
-        unsigned char* data{};
-        __exception_t exception{};
-        bool stacklocal{};
-
-        exception_obj(const __exception_t* exception, unsigned char* data, allocator alloc) noexcept
-            : alloc(alloc), data(data), exception(*exception), stacklocal(true) { }
-
-    public:
-        exception_obj(exception_obj&& other) throws
-            : exception_obj(std::move(other), other.alloc) { }
-
-        template<typename A>
-        exception_obj(exception_obj<A>&& other) throws
-            : exception_obj(std::move(other), allocator{}) { }
-
-        template<typename A>
-        exception_obj(exception_obj<A>&& other, allocator alloc) throws
-            : alloc(alloc), data(other.data), exception(other.exception)
-        {
-            // If stack-allocated within catch block, re-alloc using allocator
-            // Or if allocators differ, move between allocators
-            if (alloc != other.alloc || other.stacklocal) {
-                // TODO: adjust alignment
-                alloc.allocate(other.exception.size + other.exception.alignment);
-                exception.ctor(data, const_cast<__exception_t*>(__builtin_get_exception()), other.data);
-                exception.dtor(other.data);
-
-                if (!other.stacklocal) {
-                    other.alloc.deallocate(other.data,
-                        other.exception.size + other.exception.alignment);
-                }
-            }
-            // Otherwise just pass memory around
-            else other.data = nullptr;
-        }
-
-        ~exception_obj() noexcept
-        {
-            if (!stacklocal && data != nullptr) {
-                exception.dtor(data);
-                try { alloc.deallocate(data, exception.size + exception.alignment); }
-                catch (...) { }
-            }
-        }
-    };
-
-    using __exception_obj_t = std::exception_obj<>;
-    __exception_obj_t __make_exception_obj(unsigned char* obj) throws {
-        return __exception_obj_t(__builtin_get_exception(), obj, allocator<unsigned char>());
-    }
-
-}
-
-using __exception_obj_t = std::__exception_obj_t;
-
-__exception_obj_t __make_exception_obj(unsigned char* obj) throws {
-    return std::__make_exception_obj(obj);
-}
+protected:
+    constexpr __exception_obj_base(unsigned char* c, __exception_t e) noexcept
+        : data(c), exception(e) { }
+public:
+    __exception_obj_base() = default;
+    __exception_obj_base(const __exception_obj_base&) = default;
+    virtual ~__exception_obj_base() = default;
+};
 
 
 static_assert(std::is_trivially_copyable<__exception_t>::value,"");

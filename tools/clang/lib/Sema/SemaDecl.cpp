@@ -14575,6 +14575,25 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
   if (!Tag->isInvalidDecl())
     Consumer.HandleTagDeclDefinition(Tag);
 
+  if (Tag->getName().str() == "__exception_obj_base") {
+    auto& C = getASTContext();
+    C.ExceptObjBaseType = Tag;
+    RecordDecl *RD = dyn_cast<RecordDecl>(Tag);
+
+    for (FieldDecl* field : RD->fields()) {
+      auto name = field->getName().str();
+      if (name == "data") {
+        C.ExceptBaseMbrData = field;
+      }
+      if (name == "exception") {
+        C.ExceptBaseMbrException = field;
+      }
+    }
+    assert(C.ExceptBaseMbrData
+      && C.ExceptBaseMbrException
+      && "__exception_obj_base missing required field.");
+  }
+
   // If exception type, assign to ASTContext
   if (Tag->getName().str() == "__exception_t") {
     auto& C = getASTContext();
@@ -14608,6 +14627,9 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       else if (name == "ptr") {
         C.ExceptMbrPtr = field;
       }
+      else if (name == "alignment") {
+        C.ExceptMbrAlign = field;
+      }
     }
     assert(C.ExceptMbrSize
       && C.ExceptMbrActive
@@ -14617,6 +14639,7 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       && C.ExceptMbrBuffer
       && C.ExceptMbrBaseTypes
       && C.ExceptMbrPtr
+      && C.ExceptMbrAlign
       && "__exception_t missing required field.");
   }
 }

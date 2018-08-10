@@ -1416,6 +1416,7 @@ private:
   CharUnits CXXThisAlignment;
 
   llvm::SmallVector<VarDecl*, 2> CXXABIExceptDeclStack{};
+  llvm::SmallVector<VarDecl*, 2> CXXABIExceptObjDeclStack{};
 
   VarDecl *curExceptDecl() const {
     return CXXABIExceptDeclStack.back();

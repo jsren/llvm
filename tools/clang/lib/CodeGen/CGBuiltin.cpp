@@ -1473,24 +1473,61 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
     return RValue::get(BaseLV.getPointer());
   }
-  case Builtin::BI__builtin_get_exception_obj: {
-    // Null if not using zc exceptions
-    //if (!getLangOpts().ZCExceptions) {
-      llvm::Type *T = ConvertType(getContext().getPointerType(getContext().getStdExceptionObjType()));
-      return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
-    /*}
-
-    TODO
+  case Builtin::BI__builtin_rethrow: {
+    LValue ObjLV = EmitLValue(E->getArg(0));
+    QualType QT = getContext().getPointerType(getContext().getExceptionObjBaseType());
+    auto PtrTy = QT->castAs<PointerType>();
 
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+    Address PtrAddr = EmitLoadOfPointer(ObjLV.getAddress(), PtrTy, &BaseInfo, &TBAAInfo);
+    LValue BaseLV = MakeAddrLValue(PtrAddr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
-    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
-    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+    LValue DataLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrData);
+    LValue EStateLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
+    llvm::Value *DataVal = EmitLoadOfLValue(DataLV, SourceLocation()).getScalarVal();
+    llvm::Value *EStateVal = EmitLoadOfLValue(EStateLV, SourceLocation()).getScalarVal();
 
-    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
-    return RValue::get(BaseLV.getPointer());*/
+    // Move object back to buffer
+    LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
+    auto MbrBuffer = EmitLoadOfLValue(BufferLV, SourceLocation()).getScalarVal();
+    LValue SizeLV = EmitLValueForField(EStateLV, getContext().ExceptMbrSize);
+    auto MbrSize = EmitLoadOfLValue(SizeLV, SourceLocation()).getScalarVal();
+    LValue AlignLV = EmitLValueForField(EStateLV, getContext().ExceptMbrAlign);
+    auto MbrAlign = EmitLoadOfLValue(AlignLV, SourceLocation()).getScalarVal();
+    LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
+    auto MbrCtor = EmitLoadOfLValue(CtorLV, SourceLocation()).getScalarVal();
+
+    // Allocate exception object
+    llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptAllocFunc);
+    llvm::Value* res = Builder.CreateCall(FP, { MbrSize, MbrAlign });
+
+    MoveExceptionObject(DataVal, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
+
+    // Copy exception state
+    Address DstPtrAddr = GetAddrOfLocalVar(curExceptDecl());
+    Address DstAddr = EmitLoadOfPointer(DstPtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+
+    auto size = getContext().getTypeSize(
+      getContext().getExceptionObjectType().getTypePtr()) / 8;
+    auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
+    llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
+    Builder.CreateMemCpy(DstAddr, EStateLV.getAddress(), SizeVal, false);
+
+    // Jump to correct location
+    EmitExceptionCheck(/*checkFlag=*/false);
+  }
+  case Builtin::BI__builtin_get_exception_obj: {
+    // Null if not using zc exceptions
+    if (!getLangOpts().ZCExceptions) {
+      llvm::Type *T = ConvertType(getContext().getPointerType(getContext().getExceptionObjBaseType()));
+      return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
+    }
+    else {
+      VarDecl *VD = CXXABIExceptObjDeclStack.back();
+      Address ObjAddr = GetAddrOfLocalVar(VD);
+      return RValue::get(ObjAddr.getPointer());
+    }
   }
   case Builtin::BI__builtin_try: {
     // Create label decl

@@ -351,7 +351,6 @@ private:
   // The type for the C++ __exception_t type.
   public:
   TypeDecl *ExceptObjType = nullptr;
-  TypeDecl *StdExceptObjType = nullptr;
   FieldDecl *ExceptMbrActive = nullptr;
   FieldDecl *ExceptMbrSize = nullptr;
   FieldDecl *ExceptMbrAlign = nullptr;
@@ -364,6 +363,12 @@ private:
   VarDecl *ExceptBufferDecl = nullptr;
   FunctionDecl *ExceptInheritanceFunc = nullptr;
   FunctionDecl *ExceptAllocFunc = nullptr;
+  TypeDecl *StdExceptObjType = nullptr;
+
+  TypeDecl *ExceptObjBaseType = nullptr;
+  FieldDecl *ExceptBaseMbrData = nullptr;
+  FieldDecl *ExceptBaseMbrException = nullptr;
+
   private:
 
   /// Type for the Block descriptor for Blocks CodeGen.
@@ -1532,6 +1537,7 @@ public:
   QualType getExceptionObjectType() const;
   QualType getExceptionParamType() const;
   QualType getStdExceptionObjType() const;
+  QualType getExceptionObjBaseType() const;
 
   /// Return the unique reference to the type for the specified TagDecl
   /// (struct/union/class/enum) decl.
