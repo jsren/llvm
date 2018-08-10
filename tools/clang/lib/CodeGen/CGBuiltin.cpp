@@ -1474,6 +1474,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     return RValue::get(BaseLV.getPointer());
   }
   case Builtin::BI__builtin_rethrow: {
+    if (!CGM.getLangOpts().ZCExceptions) {
+      CXXThrowExpr TE(nullptr, getContext().VoidTy, E->getRParenLoc(), false);
+      EmitCXXThrowExpr(&TE);
+    }
+
     LValue ObjLV = EmitLValue(E->getArg(0));
     QualType QT = getContext().getPointerType(getContext().getExceptionObjBaseType());
     auto PtrTy = QT->castAs<PointerType>();
@@ -1486,7 +1491,6 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     LValue DataLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrData);
     LValue EStateLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
     llvm::Value *DataVal = EmitLoadOfLValue(DataLV, SourceLocation()).getScalarVal();
-    llvm::Value *EStateVal = EmitLoadOfLValue(EStateLV, SourceLocation()).getScalarVal();
 
     // Move object back to buffer
     LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
@@ -1516,6 +1520,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     // Jump to correct location
     EmitExceptionCheck(/*checkFlag=*/false);
+    EnsureInsertPoint();
   }
   case Builtin::BI__builtin_get_exception_obj: {
     // Null if not using zc exceptions

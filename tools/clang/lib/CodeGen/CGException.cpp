@@ -779,7 +779,6 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag, bool forceTerminate)
   // Check if within noexcept context. If so, just terminate.
   else if (!WithinThrows() || forceTerminate) {
     Builder.CreateCall(CGM.getTerminateFn());
-    Builder.CreateUnreachable();
   }
   // Otherwise return empty (propagate)
   else {
@@ -1415,10 +1414,10 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
           // Create variable for original exception object
           auto ObjVar = EmitAutoVarAlloca(*VarObj);
           ObjAddr = ObjVar.getObjectAddress(*this);
-          EmitAutoVarCleanups(ObjVar);
 
           // Initialise with original exception object
           MoveExceptionObject(MbrBuffer, ObjAddr.getPointer(), NakedType, EStateVal);
+          EmitAutoVarCleanups(ObjVar);
       }
       // Otherwise there's no hidden var - object is either in VLA or in variable itself
       else {
@@ -1444,9 +1443,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     }
 
     if (C->hasRethrow()) {
-      std::printf("This catch block has rethrow.\n");
       auto Loc = C->getCatchLoc();
-
       ASTContext& Ctx = getContext();
       IdentifierInfo* IIObj = &Ctx.Idents.get(nextExceptionIdentifier("__exception_obj_t"));
       auto VarObj = VarDecl::Create(Ctx, const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
@@ -1460,10 +1457,13 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         ConvertType(getContext().ExceptBaseMbrData->getType()));
       EmitStoreThroughLValue(RValue::get(Ptr), LV1);
       LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
-      RValue EStateRV = EmitLoadOfLValue(EStateLV, SourceLocation());
-      EmitStoreThroughLValue(EStateRV, LV2);
+      auto Size = getContext().getTypeSize(
+        getContext().getExceptionObjectType().getTypePtr()) / 8;
+
+      Builder.CreateMemCpy(LV2.getAddress(), EStateLV.getAddress(), Size);
 
       CXXABIExceptObjDeclStack.push_back(VarObj);
+      EmitAutoVarCleanups(Obj);
     }
 
     // Emit catch body

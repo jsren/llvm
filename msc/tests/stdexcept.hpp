@@ -61,6 +61,7 @@ public:
     __exception_obj_base(const __exception_obj_base&) = default;
     virtual ~__exception_obj_base() = default;
 };
+static __exception_obj_base __type_dummy2;
 
 
 static_assert(std::is_trivially_copyable<__exception_t>::value,"");

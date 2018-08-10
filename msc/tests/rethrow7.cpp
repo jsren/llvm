@@ -9,7 +9,8 @@ int main()
             throw SuperObj();
         }
         catch (BaseObj o) {
-            throw;
+            __exception_obj_base* ex = __builtin_get_exception_obj(0);
+            __builtin_rethrow(ex);
         }
     }
     catch (SuperObj o) {
