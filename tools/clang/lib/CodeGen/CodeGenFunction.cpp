@@ -1368,7 +1368,8 @@ void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
   SourceLocation Loc = FD->getLocation();
 
   // Emit the standard function prologue.
-  StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
+  std::printf("Emitting exception thunk\n");
+  StartFunction(GlobalDecl(), ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
   EnsureInsertPoint();
 
@@ -1461,8 +1462,16 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
+  bool isThrows = false;
+  CanQual<FunctionProtoType> FTP = GetFormalType(FD);
+  if (getLangOpts().ZCExceptions &&
+    !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    == ExceptionSpecificationType::EST_Throws) {
+      isThrows = true;
+  }
+
   // Emit implicit exception state if within a C function or main or throwing dtor
-  if (FD->isMain() || FD->isExternC() || WithinThrowingDtor()) {
+  if (FD->isMain() || !isThrows || WithinThrowingDtor()) {
     ASTContext& C = getContext();
     IdentifierInfo* IIObj = &C.Idents.get(nextExceptionIdentifier("__exception_state"));
     IdentifierInfo* IIArg = &C.Idents.get(nextExceptionIdentifier("__exception"));

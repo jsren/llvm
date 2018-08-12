@@ -2130,13 +2130,17 @@ llvm::Constant *CodeGenModule::EmitExceptionThunk(GlobalDecl GD, llvm::Constant 
 
     llvm::Type *T = Types.GetFunctionType(*FI);
     llvm::Constant *FP = GetOrCreateLLVMFunction(Name, T, GD, /*ForVTable=*/true,
-                            /*DontDefer=*/true, /*IsThunk=*/true);
+                            /*DontDefer=*/true, /*IsThunk=*/false);
 
     auto *Fn = cast<llvm::Function>(FP);
     Fn->setLinkage(llvm::GlobalValue::PrivateLinkage);
+
+    // Generate as necessary
+    if (Fn->isDeclaration()) {
+      CodeGenFunction(*this).GenerateExceptionThunk(GD, Fn, *FI, Callee, 1);
+    }
     //setFunctionLinkage(GD, Fn);
     // Assume exception is 2nd arg
-    CodeGenFunction(*this).GenerateExceptionThunk(GD, Fn, *FI, Callee, 1);
     return FP;
   }
   else return nullptr;

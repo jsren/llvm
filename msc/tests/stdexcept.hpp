@@ -4,16 +4,15 @@
 #include <cstdlib>
 #include <new>
 
-extern "C" {
-    alignas(64)
-    static /*thread_local*/ unsigned char __exception_obj_buffer[1024];
+alignas(64)
+inline /*thread_local*/ unsigned char __exception_obj_buffer[1024];
 
-    static unsigned char* __exception_obj_ptr = __exception_obj_buffer;
-}
+inline unsigned char* __exception_obj_ptr = __exception_obj_buffer;
 
 inline unsigned char* __cxa_allocate_exception_obj(
     decltype(sizeof(int)) size, char alignment) noexcept
 {
+    (void)alignment;
     if (__exception_obj_ptr + size > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
         return new /*((std::align_val_t)alignment)*/ unsigned char[size]();
     }
@@ -24,6 +23,7 @@ inline unsigned char* __cxa_allocate_exception_obj(
 }
 
 inline void __cxa_free_exception_obj(unsigned char* ptr, decltype(sizeof(int)) size, char alignment) noexcept {
+    (void)alignment;
     if (ptr < __exception_obj_buffer || ptr > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
         ::operator delete[](ptr/*, (std::align_val_t)alignment*/);
     }
@@ -125,7 +125,7 @@ extern "C" {
     };
 
     [[gnu::noinline]]
-    static bool __type_is_not_base(void* type, const char** super_bases) noexcept {
+    inline bool __type_is_not_base(void* type, const char** super_bases) noexcept {
         for (; super_bases[0] != nullptr; super_bases++) {
             if (static_cast<const void*>(super_bases[0]) == type) return false;
         }
@@ -223,6 +223,6 @@ struct DtorTestObj {
 #include <exception>
 #include <cstdlib>
 
-static void test_setup() {
+inline void test_setup() {
     std::set_terminate([]() { std::quick_exit(254); });
 }
