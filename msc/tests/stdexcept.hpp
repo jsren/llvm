@@ -222,7 +222,8 @@ struct DtorTestObj {
 
 #include <exception>
 #include <cstdlib>
-
+/*
 inline void test_setup() {
     std::set_terminate([]() { std::quick_exit(254); });
 }
+*/
