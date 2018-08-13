@@ -1,20 +1,17 @@
 /* stdexcept.hpp - (c) 2018 James Renwick */
 #pragma once
-#include <type_traits>
-#include <cstdlib>
-#include <new>
+#include <stdlib.h>
 
 alignas(64)
-inline /*thread_local*/ unsigned char __exception_obj_buffer[1024];
+inline /*thread_local*/ unsigned char __exception_obj_buffer[64];
 
 inline unsigned char* __exception_obj_ptr = __exception_obj_buffer;
 
 inline unsigned char* __cxa_allocate_exception_obj(
     decltype(sizeof(int)) size, char alignment) noexcept
 {
-    (void)alignment;
     if (__exception_obj_ptr + size > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
-        return new /*((std::align_val_t)alignment)*/ unsigned char[size]();
+        return reinterpret_cast<unsigned char*>(::aligned_alloc(alignment, size));
     }
     // TODO: Handle alignment correctly - this doesn't impact on WCET
     auto out = __exception_obj_ptr;
@@ -25,9 +22,9 @@ inline unsigned char* __cxa_allocate_exception_obj(
 inline void __cxa_free_exception_obj(unsigned char* ptr, decltype(sizeof(int)) size, char alignment) noexcept {
     (void)alignment;
     if (ptr < __exception_obj_buffer || ptr > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
-        ::operator delete[](ptr/*, (std::align_val_t)alignment*/);
+        ::free(ptr);
     }
-    __exception_obj_ptr -= size;
+    else __exception_obj_ptr -= size;
 }
 
 struct __exception_t {
@@ -52,8 +49,8 @@ struct __exception_t {
 // TODO: Automatically mark as 'used', removing need for this variable
 static __exception_t __type_dummy;
 
-static_assert(std::is_trivially_copyable<__exception_t>::value,"");
-static_assert(std::is_trivially_destructible<__exception_t>::value,"");
+//static_assert(std::is_trivially_copyable<__exception_t>::value,"");
+//static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
 
 class __exception_obj_base {
@@ -73,53 +70,53 @@ static __exception_obj_base __type_dummy2;
 
 
 extern "C" {
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_nullptr_t = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_int = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_1int = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_bool = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_EmptyObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_TrivialObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_NoTrivialObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_NoTrivialDtorObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_NoTrivialMoveObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_NoMoveObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_CtorThrowableObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_MoveThrowableObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_CtorThrowsObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_MoveThrowsObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_DtorThrowsObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_BaseObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_1BaseObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_SuperObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_1SuperObj = 0;
-    [[gnu::weak]] alignas(1)
-        char __typeid_for_DtorTestObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_nullptr_t = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_int = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_1int = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_bool = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_EmptyObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_TrivialObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_NoTrivialObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_NoTrivialDtorObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_NoTrivialMoveObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_NoMoveObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_CtorThrowableObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_MoveThrowableObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_CtorThrowsObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_MoveThrowsObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_DtorThrowsObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_BaseObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_1BaseObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_SuperObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_1SuperObj = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_DtorTestObj = 0;
 
-    [[gnu::weak]] alignas(alignof(char*))
-    char* __typeid_empty_bases[1] = { nullptr };
+    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    extern const char* __typeid_empty_bases[1] = { nullptr };
 
     // Alternative form
-    [[gnu::weak]] alignas(alignof(char*))
-    char* __typeid_bases_for_SuperObj[] = {
+    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    extern const char* __typeid_bases_for_SuperObj[] = {
         &__typeid_for_BaseObj,
         nullptr
     };
@@ -220,8 +217,8 @@ struct DtorTestObj {
     ~DtorTestObj() { i++; }
 };
 
-#include <exception>
-#include <cstdlib>
+//#include <exception>
+//#include <cstdlib>
 /*
 inline void test_setup() {
     std::set_terminate([]() { std::quick_exit(254); });

@@ -1,32 +1,34 @@
 #include "xmlbench.hpp"
 #include <string.h>
 
-[[gnu::weak]] alignas(1)
-    char __typeid_for_exception = 0;
-[[gnu::weak]] alignas(1)
-    char __typeid_for_XMLException = 0;
-[[gnu::weak]] alignas(1)
-    char __typeid_for_MultipleRootException = 0;
-[[gnu::weak]] alignas(1)
-    char __typeid_for_BadSyntaxException = 0;
+extern "C" {
+[[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    extern const char __typeid_for_exception = 0;
+[[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    extern const char __typeid_for_XMLException = 0;
+[[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    extern const char __typeid_for_MultipleRootException = 0;
+[[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    extern const char __typeid_for_BadSyntaxException = 0;
 
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_XMLException[] = {
+[[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+extern const char* __typeid_bases_for_XMLException[] = {
     &__typeid_for_exception,
     nullptr
 };
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_MultipleRootException[] = {
+[[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+extern const char* __typeid_bases_for_MultipleRootException[] = {
     &__typeid_for_exception,
     &__typeid_for_XMLException,
     nullptr
 };
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_BadSyntaxException[] = {
+[[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+extern const char* __typeid_bases_for_BadSyntaxException[] = {
     &__typeid_for_exception,
     &__typeid_for_BadSyntaxException,
     nullptr
 };
+}
 
 namespace xmlb
 {

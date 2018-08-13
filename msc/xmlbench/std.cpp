@@ -7,35 +7,52 @@ static string* exception_what{};
 static string* index_out_of_range_what{};
 static string* file_not_found_what{};
 
-[[gnu::weak]] alignas(1)
-    char __typeid_for_file_not_found = 0;
-[[gnu::weak]] alignas(1)
-    char __typeid_for_index_out_of_range = 0;
-[[gnu::weak]] alignas(1)
-    char __typeid_for_out_of_memory = 0;
-[[gnu::weak]] alignas(1)
-    char __typeid_for_exception = 0;
+void* operator new(size_type size, void* ptr) noexcept {
+    (void)size; return ptr;
+}
+void* operator new[](size_type size, void* ptr) noexcept {
+    (void)size; return ptr;
+}
+void operator delete(void* ptr) noexcept {
+    (void)ptr;
+}
 
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_exception[] = {
-    nullptr
-};
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_out_of_memory[] = {
-    &__typeid_for_exception,
-    nullptr
-};
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_index_out_of_range[] = {
-    &__typeid_for_exception,
-    nullptr
-};
-[[gnu::weak]] alignas(alignof(char*))
-char* __typeid_bases_for_file_not_found[] = {
-    &__typeid_for_exception,
-    nullptr
-};
+namespace std {
+    void terminate() {
+        ::abort();
+    }
+}
 
+extern "C" {
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_file_not_found = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_index_out_of_range = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_out_of_memory = 0;
+    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+        extern const char __typeid_for_exception = 0;
+
+    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    extern const char* __typeid_bases_for_exception[] = {
+        nullptr
+    };
+    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    extern const char* __typeid_bases_for_out_of_memory[] = {
+        &__typeid_for_exception,
+        nullptr
+    };
+    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    extern const char* __typeid_bases_for_index_out_of_range[] = {
+        &__typeid_for_exception,
+        nullptr
+    };
+    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    extern const char* __typeid_bases_for_file_not_found[] = {
+        &__typeid_for_exception,
+        nullptr
+    };
+}
 
 const string& exception::what() const noexcept
 {

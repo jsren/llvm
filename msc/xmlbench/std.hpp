@@ -10,6 +10,9 @@
 //#endif
 
 using size_type = decltype(sizeof(int));
+void* operator new(size_type size, void* ptr) noexcept;
+void* operator new[](size_type size, void* ptr) noexcept;
+void operator delete(void* ptr) noexcept;
 
 //extern unsigned char* stdheap_start;
 
