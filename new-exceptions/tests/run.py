@@ -4,8 +4,11 @@ import re
 import subprocess
 from typing import List, Tuple, Any, Union
 
-compiler = "/source/build-llvm/bin/clang++"
-default_args = [compiler, '-Wno-everything', '-g', '-std=c++14']
+compiler = os.environ.get("CLANGXX_BINARY")
+if not compiler:
+    compiler = os.path.join(os.path.dirname(__file__), "../../../build-llvm/bin/clang++")
+
+default_args = [compiler, '-Wno-everything', '-g', '-std=c++17']
 variant_args = [('-fzcexceptions', '-fexceptions'), ('-O0', '-O3')]
 
 def split_alpha_num(s) -> Tuple[Union[str, int]]:
@@ -22,6 +25,7 @@ class Result:
 
 def run(filename : str, outfile : str, expected_rc : int, args : List[str]) -> Result:
     try:
+        print(args)
         proc = subprocess.run(args, timeout=10, check=True)
     except subprocess.TimeoutExpired:
         return Result(outfile, args, False, "Timeout exceeded when compiling")

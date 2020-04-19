@@ -2,7 +2,18 @@ clang::driver::Command::Execute
 Sema::CppLookupName
 SemaLookup.cpp:939 CppNamespaceLookup
 
-/source/build-llvm/bin/clang-7 -- "-cc1" "-triple" "x86_64-unknown-linux-gnu" "-emit-obj" "-mrelax-all" "-disable-free" "-main-file-name" "ast_test1.cpp" "-mrelocation-model" "static" "-mthread-model" "posix" "-mdisable-fp-elim" "-fmath-errno" "-masm-verbose" "-mconstructor-aliases" "-munwind-tables" "-fuse-init-array" "-target-cpu" "x86-64" "-dwarf-column-info" "-debugger-tuning=gdb" "-resource-dir" "/source/build-llvm/lib/clang/7.0.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0/backward" "-internal-isystem" "/usr/local/include" "-internal-isystem" "/source/build-llvm/lib/clang/7.0.0/include" "-internal-externc-isystem" "/usr/include/x86_64-linux-gnu" "-internal-externc-isystem" "/include" "-internal-externc-isystem" "/usr/include" "-fdeprecated-macro" "-fdebug-compilation-dir" "/source" "-ferror-limit" "19" "-fmessage-length" "282" "-fobjc-runtime=gcc" "-fcxx-exceptions" "-fexceptions" "-fdiagnostics-show-option" "-fcolor-diagnostics" "-o" "/tmp/ast_test1-e4b7bd.o" "-x" "c++" "/source/llvm/msc/cg_test1.cpp"
+Setup:
+  sudo apt install cmake ninja-build
+
+Configure:
+  mkdir ../build-llvm && cd ../build-llvm
+  # Limit the number of parallel link jobs to something sane
+  # The value will depend on your available system ram
+  #
+  cmake -DLLVM_TARGETS_TO_BUILD="X86;ARM" -DLLVM_PARALLEL_LINK_JOBS=2 -G "Ninja" ../llvm
+
+
+/source/build-llvm/bin/clang-7 -- "-cc1" "-triple" "x86_64-unknown-linux-gnu" "-emit-obj" "-mrelax-all" "-disable-free" "-main-file-name" "ast_test1.cpp" "-mrelocation-model" "static" "-mthread-model" "posix" "-mdisable-fp-elim" "-fmath-errno" "-masm-verbose" "-mconstructor-aliases" "-munwind-tables" "-fuse-init-array" "-target-cpu" "x86-64" "-dwarf-column-info" "-debugger-tuning=gdb" "-resource-dir" "/source/build-llvm/lib/clang/7.0.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/x86_64-linux-gnu/c++/7.3.0" "-internal-isystem" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../../include/c++/7.3.0/backward" "-internal-isystem" "/usr/local/include" "-internal-isystem" "/source/build-llvm/lib/clang/7.0.0/include" "-internal-externc-isystem" "/usr/include/x86_64-linux-gnu" "-internal-externc-isystem" "/include" "-internal-externc-isystem" "/usr/include" "-fdeprecated-macro" "-fdebug-compilation-dir" "/source" "-ferror-limit" "19" "-fmessage-length" "282" "-fobjc-runtime=gcc" "-fcxx-exceptions" "-fexceptions" "-fdiagnostics-show-option" "-fcolor-diagnostics" "-o" "/tmp/ast_test1-e4b7bd.o" "-x" "c++" "/source/llvm/new-exceptions/cg_test1.cpp"
 
 "/usr/bin/ld" "-z" "relro" "--hash-style=gnu" "--eh-frame-hdr" "-m" "elf_x86_64" "-dynamic-linker" "/lib64/ld-linux-x86-64.so.2" "-o" "a.out" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu/crt1.o" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu/crti.o" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/crtbegin.o" "-L/usr/lib/gcc/x86_64-linux-gnu/7.3.0" "-L/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu" "-L/lib/x86_64-linux-gnu" "-L/lib/../lib64" "-L/usr/lib/x86_64-linux-gnu" "-L/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../.." "-L/source/build-llvm/bin/../lib" "-L/lib" "-L/usr/lib" "/tmp/ast_test1-e4b7bd.o" "-lstdc++" "-lm" "-lgcc_s" "-lgcc" "-lc" "-lgcc_s" "-lgcc" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/crtend.o" "/usr/lib/gcc/x86_64-linux-gnu/7.3.0/../../../x86_64-linux-gnu/crtn.o"
 
@@ -65,7 +76,7 @@ ParseAST.cpp:156 <- Consumer->HandleTopLevelDecl
 3. Emit exception variable in CodeGenFunction:1294
 
 ------------------------------------------------------------
-Issues with Herb's approach:
+Issues:
     1. Ctors and Dtors have different signatures
     2. Functions in general have different signatures/calling between throws and noexcept
 Solution:
@@ -91,3 +102,21 @@ to insert extra exception argument.
 
 ImplicitParamDecl!!!!
 void CodeGenFunction::setAddrOfLocalVar(const VarDecl *VD, Address Addr)!!!!
+
+
+/mnt/s/source/llvm/tools/clang/lib/Sema/SemaChecking.cpp: In member function ‘clang::ExprResult clang::Sema::CheckBuiltinFunctionCall(clang::FunctionDecl*, unsigned int, clang::CallExpr*)’:
+/mnt/s/source/llvm/tools/clang/lib/Sema/SemaChecking.cpp:1295:33: warning: this statement may fall through [-Wimplicit-fallthrough=]
+     RethrowMarkers.back() = true;
+                                 ^
+/mnt/s/source/llvm/tools/clang/lib/Sema/SemaChecking.cpp:1297:3: note: here
+   case Builtin::BI__builtin_throw: {
+
+/mnt/s/source/llvm/tools/clang/lib/CodeGen/CGBuiltin.cpp: In member function ‘clang::CodeGen::RValue clang::CodeGen::CodeGenFunction::EmitBuiltinExpr(const clang::FunctionDecl*, unsigned int, const clang::CallExpr*, clang::CodeGen::ReturnValueSlot)’:
+/mnt/s/source/llvm/tools/clang/lib/CodeGen/CGBuiltin.cpp:1524:24: warning: this statement may fall through [-Wimplicit-fallthrough=]
+     EnsureInsertPoint();
+                        ^
+/mnt/s/source/llvm/tools/clang/lib/CodeGen/CGBuiltin.cpp:1526:3: note: here
+   case Builtin::BI__builtin_get_exception_obj: {
+
+
+Mon Dec 18 16:33:29 2017
