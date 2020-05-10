@@ -5291,10 +5291,6 @@ QualType ASTContext::getExceptionObjectType() const {
   assert(ExceptObjType && "Missing __exception_t definition.");
   return QualType(ExceptObjType->getTypeForDecl(), 0);
 }
-QualType ASTContext::getStdExceptionObjType() const {
-  assert(StdExceptObjType && "Missing __exception_obj_t definition.");
-  return QualType(StdExceptObjType->getTypeForDecl(), 0);
-}
 QualType ASTContext::getExceptionObjBaseType() const {
   assert(ExceptObjBaseType && "Missing __exception_obj_base definition.");
   return QualType(ExceptObjBaseType->getTypeForDecl(), 0);

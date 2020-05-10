@@ -4691,6 +4691,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     }
   }
 
+  // Add the implicit exception state object (ESO) parameter to the list
+  // of args if enabled
   CanQual<FunctionProtoType> FTP = GetFormalType(FD);
   if (getLangOpts().ZCExceptions &&
     !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()

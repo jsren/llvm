@@ -1456,8 +1456,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
   switch (BuiltinID) {
   default: break;
+  /**
+   * This new built-in function allows getting a pointer to the current exception state object.
+   * __exception_t* __builtin_get_exception() noexcept;
+   */
   case Builtin::BI__builtin_get_exception: {
-    // Null if not using zc exceptions
+    // Return null if not using zc exceptions
     if (!getLangOpts().ZCExceptions) {
       llvm::Type *T = ConvertType(getContext().getExceptionParamType());
       return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
@@ -1465,21 +1469,28 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
+    // Get the address of the current ESO pointer (__exception_t**)
     Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
 
+    // Dereference and convert to pointer to ESO (__exception_t*)
     auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
     Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
 
     LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
     return RValue::get(BaseLV.getPointer());
   }
+  /**
+   * This new built-in function allows rethrowing a __exception_obj_base* - the
+   * value obtained from __builtin_get_exception_obj().
+   */
   case Builtin::BI__builtin_rethrow: {
     if (!CGM.getLangOpts().ZCExceptions) {
       CXXThrowExpr TE(nullptr, getContext().VoidTy, E->getRParenLoc(), false);
       EmitCXXThrowExpr(&TE);
     }
 
-    //LValue ObjLV = EmitLValue(E->getArg(0));
+    // Get the pointer to the source exception state object (ESO)
+    // from the first argument to __builtin_rethrow
     RValue ObjRV = EmitAnyExpr(E->getArg(0));
     LValue BaseLV = MakeNaturalAlignAddrLValue(ObjRV.getScalarVal(),
       getContext().getExceptionObjBaseType());
@@ -1487,9 +1498,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     QualType QT = getContext().getPointerType(getContext().getExceptionObjBaseType());
     auto PtrTy = QT->castAs<PointerType>();
 
-    LValueBaseInfo BaseInfo;
-    TBAAAccessInfo TBAAInfo;
-
+    // Read the necessary fields from the source ESO
     LValue EStateLV = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
     LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
     auto MbrBuffer = EmitLoadOfLValue(BufferLV, SourceLocation()).getScalarVal();
@@ -1500,29 +1509,38 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
     auto MbrCtor = EmitLoadOfLValue(CtorLV, SourceLocation()).getScalarVal();
 
-    // Allocate exception object
+    // Allocate exception object via call to __cxa_allocate_exception_obj(size, align)
     llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptAllocFunc);
     llvm::Value* res = Builder.CreateCall(FP, { MbrSize, MbrAlign });
 
-    // Move object back to buffer
+    // Move exception object back to exception object buffer
     MoveExceptionObject(MbrBuffer, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
-    // Update address in exception state
+
+    // Update address in source exception state object
     EmitStoreThroughLValue(RValue::get(res), BufferLV);
 
-    // Copy exception state
+    // Get address of destination ESO
     Address DstPtrAddr = GetAddrOfLocalVar(curExceptDecl());
-    Address DstAddr = EmitLoadOfPointer(DstPtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+    Address DstAddr = EmitLoadOfPointer(DstPtrAddr, PtrTy, nullptr, nullptr);
 
+    // Get the size of the ESO
     auto size = getContext().getTypeSize(
       getContext().getExceptionObjectType().getTypePtr()) / 8;
     auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
     llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
+
+    // Copy exception state object
     Builder.CreateMemCpy(DstAddr, EStateLV.getAddress(), SizeVal, false);
 
     // Jump to correct location
     EmitExceptionCheck(/*checkFlag=*/false);
     EnsureInsertPoint();
+    return RValue::getIgnored();
   }
+  /**
+   * This new built-in function allows getting a pointer to the current exception state object.
+   * __exception_t* __builtin_get_exception() noexcept;
+   */
   case Builtin::BI__builtin_get_exception_obj: {
     // Null if not using zc exceptions
     if (!getLangOpts().ZCExceptions) {
@@ -1534,121 +1552,6 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       Address ObjAddr = GetAddrOfLocalVar(VD);
       return RValue::get(ObjAddr.getPointer());
     }
-  }
-  case Builtin::BI__builtin_try: {
-    // Create label decl
-    std::string Name = "__catch_handler" + std::to_string(nextCatchHandlerId++);
-    IdentifierInfo* II = &getContext().Idents.get(Name.c_str());
-    FunctionDecl *FD = const_cast<FunctionDecl*>(cast<FunctionDecl>(CurGD.getDecl()));
-    LabelDecl *LD = LabelDecl::Create(getContext(), const_cast<DeclContext*>(
-      FD->getDeclContext()), FD->getLocation(), II);
-    catchHandlerStack.push_back(LD);
-    getJumpDestForLabel(LD);
-    return RValue::getIgnored();
-  }
-  case Builtin::BI__builtin_catch: {
-    assert(catchHandlerStack.size() > 0 && "Missing companion __builtin_try");
-
-    // Emit jump around catch
-    std::string Name = catchHandlerStack.back()->getName().str() + "_end";
-    IdentifierInfo* II = &getContext().Idents.get(Name.c_str());
-    FunctionDecl *FD = const_cast<FunctionDecl*>(cast<FunctionDecl>(CurGD.getDecl()));
-    LabelDecl *LD = LabelDecl::Create(getContext(), const_cast<DeclContext*>(
-      FD->getDeclContext()), FD->getLocation(), II);
-    catchHandlerEndStack.push_back(LD);
-    EmitBranchThroughCleanup(getJumpDestForLabel(LD));
-
-    // Consume and emit label decl
-    EmitLabel(catchHandlerStack.back());
-    catchHandlerStack.pop_back();
-
-    // Set 'threw' to false
-    LValueBaseInfo BaseInfo;
-    TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
-
-    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
-    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
-    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
-  
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrActive);
-    EmitStoreThroughLValue(RValue::get(Builder.getFalse()), LV);
-
-    return RValue::getIgnored();
-  }
-  case Builtin::BI__builtin_catch_end: {
-    assert(catchHandlerEndStack.size() > 0 && "Missing companion __builtin_catch");
-
-    // Consume and emit label decl
-    EmitLabel(catchHandlerEndStack.back());
-    catchHandlerEndStack.pop_back();
-    return RValue::getIgnored();
-  }
-  case Builtin::BI__builtin_throw: {
-    LValueBaseInfo BaseInfo;
-    TBAAAccessInfo TBAAInfo;
-    Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
-
-    auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
-    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
-    LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
-  
-    // Assign object size
-    //E->getArg(0)->getType();
-    LValue LV = EmitLValueForField(BaseLV, getContext().ExceptMbrActive);
-    EmitStoreThroughLValue(RValue::get(Builder.getTrue()), LV);
-
-    // Get name of type-id to reference
-    VarDecl *TIDDecl = VarDeclForTypeID(E->getArg(0)->getType());
-    DeclRefExpr *DeclRef = DeclRefExpr::Create(CGM.getContext(), NestedNameSpecifierLoc{},
-        SourceLocation{}, TIDDecl, false, SourceLocation{}, TIDDecl->getType(), ExprValueKind::VK_LValue);
-
-    // Assign type-id to type
-    LValue LV1 = EmitDeclRefLValue(DeclRef);
-    LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptMbrType);
-    EmitStoreThroughLValue(RValue::get(LV1.getPointer()), LV2);
-
-    // Get address of destructor for type
-    CXXRecordDecl *R = E->getArg(0)->getType().getTypePtr()->getAsCXXRecordDecl();
-    LValue LV3 = EmitLValueForField(BaseLV, getContext().ExceptMbrDtor);
-    // Set to null if no destructor
-    if (R == nullptr || !R->hasNonTrivialDestructor()) {
-      llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
-      auto CP = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
-      EmitStoreThroughLValue(RValue::get(CP), LV3);
-    }
-    else {
-      CXXDestructorDecl *D = R->getDestructor();
-      llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(D, StructorType::Complete);
-      llvm::Value *Ptr = Builder.CreateBitCast(FPtr, ConvertType(LV3.getType()));
-      EmitStoreThroughLValue(RValue::get(Ptr), LV3);
-    }
-
-    FunctionDecl* curDecl = dyn_cast<FunctionDecl>(const_cast<Decl*>(CurFuncDecl));
-    const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
-
-    // Emit goto catch handler if one present
-    if (catchHandlerStack.size() > 0) {
-      EmitBranchThroughCleanup(getJumpDestForLabel(catchHandlerStack.back()));
-      EmitBlock(createBasicBlock("throw.cont"));
-    }
-    // Return empty if throws
-    else if (FPT && FPT->getExceptionSpecType()
-      == ExceptionSpecificationType::EST_Throws)
-    {
-      Expr *e = new (getContext()) CallExpr (getContext(),
-        Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
-      e->setEmpty(true);
-      ReturnStmt *RT = new (getContext()) ReturnStmt(
-        SourceLocation(), e, nullptr);
-      EmitReturnStmt(*RT);
-      EmitBlock(createBasicBlock("throw.cont"));
-    }
-    // If non-throws function, just call std::terminate
-    else {
-      Builder.CreateCall(CGM.getTerminateFn());
-    }
-    return RValue::getIgnored();
   }
   case Builtin::BI__builtin_empty_return:
     return RValue::getIgnored();

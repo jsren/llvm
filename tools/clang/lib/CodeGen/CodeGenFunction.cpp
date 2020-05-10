@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <regex>
 #include "CodeGenFunction.h"
 #include "CGBlocks.h"
 #include "CGCleanup.h"
@@ -40,11 +41,6 @@
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 using namespace clang;
 using namespace CodeGen;
-
-static llvm::Constant *getSize(CodeGenFunction& CGF, uint64_t V) {
-  llvm::Type* T = CGF.ConvertType(CGF.getContext().getSizeType());
-  return llvm::ConstantInt::get(cast<llvm::IntegerType>(T), V);
-}
 
 /// Returns the canonical formal type of the given C++ method.
 static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *MD) {
@@ -1249,24 +1245,22 @@ static void TryMarkNoThrow(llvm::Function *F) {
   F->setDoesNotThrow();
 }
 
+/**
+ * Load the implicit exception state object parameter.
+ */
 llvm::Value *CodeGenFunction::LoadExceptParam() {
-  // Push exception object pointer.
-  llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(curExceptDecl()).getPointer();
-
-  llvm::Value *Addr =
-    EmitLoadOfScalar(GetAddrOfLocalVar(curExceptDecl()),
-                      /*Volatile=*/false,
-                      getContext().getExceptionParamType(),
-                      curExceptDecl()->getLocation());
-  return Addr;
+  return EmitLoadOfScalar(GetAddrOfLocalVar(curExceptDecl()),
+                          /*Volatile=*/false,
+                          getContext().getExceptionParamType(),
+                          curExceptDecl()->getLocation());
 }
 
+/**
+ * Add the implicit exception state object parameter to the function call's
+ * argument list.
+ */
 void CodeGenFunction::LoadExceptParam(CallArgList& Args) {
-      // Push exception object pointer.
-  llvm::Value* ExceptionObj =
-    GetAddrOfLocalVar(curExceptDecl()).getPointer();
-
+  // Push exception object pointer.
   llvm::Value *Addr =
     EmitLoadOfScalar(GetAddrOfLocalVar(curExceptDecl()),
                       /*Volatile=*/false,
@@ -1341,6 +1335,14 @@ shouldUseUndefinedBehaviorReturnOptimization(const FunctionDecl *FD,
   return !T.isTriviallyCopyableType(Context);
 }
 
+/**
+ * Here we generate the "exception thunk" - a small function wrapper
+ * which wraps a function without a throws specifier such that it shares
+ * a common signature with the equivalent function with a throws specifier.
+ *
+ * E.g.
+ *  void example(T1 v1, T2 v2) -> void example_thunk(__exception_t* __exception, T1 v1, T2 v2)
+ */
 void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
                                              llvm::Function *Fn,
                                              const CGFunctionInfo &FnInfo,
@@ -1354,7 +1356,7 @@ void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
 
   // Check if we should generate debug info for this function.
   if (FD->hasAttr<NoDebugAttr>())
-    DebugInfo = nullptr; // disable debug info indefinitely for this function  
+    DebugInfo = nullptr; // disable debug info indefinitely for this function
 
   SourceRange BodyRange;
   FD->getLocation();
@@ -1367,14 +1369,21 @@ void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
   // gen. (examples: _GLOBAL__I_a, __cxx_global_array_dtor, thunk).
   SourceLocation Loc = FD->getLocation();
 
+  // Create a declaration to keep the debug info happy (e.g. when inlining the wrapped function call)
+  TypeSourceInfo* TSI = FD->getASTContext().getTrivialTypeSourceInfo(ResTy, Loc);
+  FunctionDecl* ThunkFD = FunctionDecl::Create(FD->getASTContext(), const_cast<DeclContext*>(FD->getDeclContext()),
+                                               Loc, DeclarationNameInfo(), ResTy, TSI, StorageClass::SC_Static,
+                                               false, false);
+
   // Emit the standard function prologue.
-  std::printf("Emitting exception thunk\n");
-  StartFunction(GlobalDecl(), ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
+  StartFunction(GlobalDecl(ThunkFD), ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
   EnsureInsertPoint();
 
+  // JSR TODO: Replace VLA with one of LLVM's vectors
   llvm::Value *Args2[Args.size() - 1];
 
+  // Load all of the original function's arguments
   for (size_t i = 0, j = 0; i < Args.size(); i++) {
     if (i != exceptionArg) {
       LValue LV = MakeAddrLValue(GetAddrOfLocalVar(Args[i]), Args[i]->getType());
@@ -1382,6 +1391,7 @@ void CodeGenFunction::GenerateExceptionThunk(GlobalDecl GD,
     }
   }
 
+  // Emit call to the wrapped function
   Builder.CreateCall(Callee, ArrayRef<llvm::Value*>(Args2, Args2 + Args.size()-1));
 
   // C++11 [stmt.return]p2:
@@ -1556,8 +1566,10 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
     TryMarkNoThrow(CurFn);
 }
 
-#include <regex>
-
+/**
+ * This function get the VarDecl for the inheritance table of the given
+ * type used as runtime type information in deterministic exceptions.
+ */
 VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
   Qualifiers _;
   T = getContext().getUnqualifiedArrayType(T, _);
@@ -1573,10 +1585,13 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
   const CXXRecordDecl *RD = T1.getTypePtr()->getAsCXXRecordDecl();
   bool hasBases = RD && RD->getNumBases();
 
-  // If not pointer type or inheritless class
+  // If the type is not a pointer and has base classes,
+  // then reference the inheritance table which should have been produced
   if (!T1->isPointerType() && hasBases != 0) {
     std::string Name = QualType::getAsString(T1.split(),
       getContext().getPrintingPolicy());
+    // JSR TODO: Regex? really?
+    // Get the identifier-safe type name
     Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
     idName = "__typeid_bases_for_" + Name;
   }
@@ -1584,7 +1599,7 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
   const char* CName = idName.c_str();
   IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
   auto CT = getContext().getPointerType(getContext().CharTy);
-  
+
   // Get file context
   DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
   while (!TUnitDC->isFileContext()) {
@@ -1603,7 +1618,7 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
 
   assert(Decl->getLanguageLinkage() == CLanguageLinkage);
   return Decl;
-}  
+}
 
 static QualType StripAllQualifiers(ASTContext &ctx, QualType T)
 {
@@ -1616,12 +1631,20 @@ static QualType StripAllQualifiers(ASTContext &ctx, QualType T)
   return T;
 }
 
+/**
+ * This function get the VarDecl for the type id (symbol) of the given
+ * type used as runtime type information in deterministic exceptions.
+ */
 VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
   T = StripAllQualifiers(getContext(), T);
 
   std::string Name = QualType::getAsString(T.split(),
     getContext().getPrintingPolicy());
 
+  // JSR TODO: Regex? really?
+  // Get the identifier-safe type name
+  // The number of pointer indirections is prepended, allowing
+  // pointer depth to be matched
   auto count = std::count(Name.begin(), Name.end(), '*');
   Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
   Name = "__typeid_for_" + (count != 0 ?
@@ -1630,7 +1653,7 @@ VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
 
   IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
   auto CT = CGM.getContext().CharTy;
-  
+
   // Get file context
   DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
   while (!TUnitDC->isFileContext()) {
@@ -1665,15 +1688,6 @@ bool CodeGenFunction::ContainsLabel(const Stmt *S, bool IgnoreCaseStmts) {
   // can't jump to one from outside their declared region.
   if (isa<LabelStmt>(S))
     return true;
-
-  if (isa<CallExpr>(S)) {
-    const CallExpr *CE = cast<CallExpr>(S);
-    const FunctionDecl *FD = CE->getDirectCallee();
-    if (FD && FD->getBuiltinID() == Builtin::BI__builtin_catch)
-      return true;
-    if (FD && FD->getBuiltinID() == Builtin::BI__builtin_catch_end)
-      return true;
-  }
 
   // If this is a case/default statement, and we haven't seen a switch, we have
   // to emit the code.

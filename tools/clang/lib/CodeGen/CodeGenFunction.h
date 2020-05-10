@@ -1435,7 +1435,7 @@ private:
   void MoveExceptionObject(llvm::Value*, llvm::Value*, QualType, llvm::Value*);
   void MoveExceptionObject(llvm::Value*, llvm::Value*, llvm::Value*, llvm::Value*,
     llvm::Value*, llvm::Value*);
-  
+
   llvm::Value *GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out);
   llvm::Value *GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_out);
 

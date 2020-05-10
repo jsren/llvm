@@ -349,6 +349,7 @@ public:
   SmallVector<Scope*, 2> CurrentSEHFinally;
 
   /// Stack of rethrow markers. Can be empty.
+  /// This is used to track whether rethrowing is valid.
   SmallVector<bool, 2> RethrowMarkers;
 
   /// Source location for newly created implicit MSInheritanceAttrs

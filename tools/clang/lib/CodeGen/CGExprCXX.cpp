@@ -86,8 +86,8 @@ commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
 
 RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
     const CXXMethodDecl *MD, const CGCallee &Callee,
-    ReturnValueSlot ReturnValue, llvm::Value *This,
-    llvm::Value *ImplicitParam, QualType ImplicitParamTy,
+    ReturnValueSlot ReturnValue,
+    llvm::Value *This, llvm::Value *ImplicitParam, QualType ImplicitParamTy,
     const CallExpr *CE, CallArgList *RtlArgs) {
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
   CallArgList Args;
@@ -99,6 +99,10 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
                   CE ? CE->getExprLoc() : SourceLocation());
 }
 
+/**
+ * Emits a call to a member function or operator predicated on
+ * the given runtime condition.
+ */
 RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
     const CXXMethodDecl *MD, const CGCallee &Callee,
     ReturnValueSlot ReturnValue,
@@ -132,9 +136,9 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
 }
 
 RValue CodeGenFunction::EmitCXXDestructorCall(
-    const CXXDestructorDecl *DD, const CGCallee &Callee,
-    llvm::Value *This, llvm::Value *ImplicitParam,
-    QualType ImplicitParamTy, const CallExpr *CE, StructorType Type) {
+    const CXXDestructorDecl *DD, const CGCallee &Callee, llvm::Value *This,
+    llvm::Value *ImplicitParam, QualType ImplicitParamTy, const CallExpr *CE,
+    StructorType Type) {
   CallArgList Args;
   commonEmitCXXMemberOrOperatorCall(*this, DD, This, ImplicitParam,
                                     ImplicitParamTy, CE, Args, nullptr);
@@ -481,16 +485,17 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   CGCallee Callee =
     CGM.getCXXABI().EmitLoadOfMemberFunctionPointer(*this, BO, This,
                                              ThisPtrForCall, MemFnPtr, MPT);
-  
+
   CallArgList Args;
 
-  QualType ThisType = 
+  QualType ThisType =
     getContext().getPointerType(getContext().getTagDeclType(RD));
 
   // Push the this ptr.
   Args.add(RValue::get(ThisPtrForCall), ThisType);
 
-  // Push exception object pointer.
+  // Add the implicit exception state object (ESO) parameter to the list
+  // of args if enabled
   if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     LoadExceptParam(Args);

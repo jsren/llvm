@@ -587,6 +587,10 @@ namespace {
     }
   };
 
+  /**
+   * Cleanup type for destroying the exception object within a
+   * catch-all block for deterministic exceptions.
+   */
   struct CallCatchAllDtor final : EHScopeStack::Cleanup {
     llvm::Value *Dtor{};
     Address Object;
@@ -604,8 +608,9 @@ namespace {
 
       llvm::BasicBlock *TrueBlock = CGF.createBasicBlock("if.then");
       llvm::BasicBlock *ContBlock = CGF.createBasicBlock("if.cont");
-
       CGF.Builder.CreateCondBr(Val, TrueBlock, ContBlock, nullptr, nullptr);
+
+      // If the destructor is not nullptr, call it
       CGF.EmitBlock(TrueBlock);
       llvm::Value *Args[] = { Object.getPointer() };
       Args[0] = CGF.Builder.CreateBitCast(Args[0], CGF.ConvertType(CGF.getContext().VoidPtrTy));

@@ -2031,13 +2031,14 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
     return;
   }
 
+  // Add the implicit exception state object (ESO) parameter to the list
+  // of args if enabled
   if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     LoadExceptParam(Args);
   }
 
   // Add the rest of the user-supplied arguments.
-  
   EvaluationOrder Order = E->isListInitialization()
                               ? EvaluationOrder::ForceLeftToRight
                               : EvaluationOrder::Default;
@@ -2286,7 +2287,8 @@ CodeGenFunction::EmitSynthesizedCXXCopyCtorCall(const CXXConstructorDecl *D,
   // Push the this ptr.
   Args.add(RValue::get(This.getPointer()), D->getThisType(getContext()));
 
-  // Push exception object pointer.
+  // Add the implicit exception state object (ESO) parameter to the list
+  // of args if enabled
   if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     LoadExceptParam(Args);

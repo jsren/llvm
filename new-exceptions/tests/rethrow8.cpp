@@ -9,7 +9,7 @@ int main()
             throw TrivialObj{57};
         }
         catch (...) {
-            __builtin_rethrow(__builtin_get_exception_obj(0));
+            throw;
         }
     }
     catch (TrivialObj o) {

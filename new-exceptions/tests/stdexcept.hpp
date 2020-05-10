@@ -13,7 +13,7 @@ inline unsigned char* __cxa_allocate_exception_obj(
     if (__exception_obj_ptr + size > __exception_obj_buffer + sizeof(__exception_obj_buffer)) {
         return reinterpret_cast<unsigned char*>(::aligned_alloc(alignment, size));
     }
-    // TODO: Handle alignment correctly - this doesn't impact on WCET
+    // JSR TODO: Handle alignment correctly - this doesn't impact on WCET
     auto out = __exception_obj_ptr;
     __exception_obj_ptr += size;
     return out;
@@ -27,6 +27,12 @@ inline void __cxa_free_exception_obj(unsigned char* ptr, decltype(sizeof(int)) s
     else __exception_obj_ptr -= size;
 }
 
+/**
+ * The exception state object (ESO) class declaration.
+ *
+ * This must contain specific fields of specific types otherwise
+ * clang will assert during compilation.
+ */
 struct __exception_t {
     // Address of exception object buffer
     unsigned char *buffer;
@@ -37,8 +43,8 @@ struct __exception_t {
     // Size of exception object
     decltype(sizeof(int)) size;
     // If the original ctor is not 'throws', we will emit and assign a thunk instead
-    // TODO: support VTT pointer
-    void(*ctor)(void*, __exception_t*, void*); 
+    // JSR TODO: support VTT pointer
+    void(*ctor)(void*, __exception_t*, void*);
     void(*dtor)(void*);
     bool active;
     bool ptr;
@@ -46,26 +52,35 @@ struct __exception_t {
     char alignment;
 };
 // Force Clang to emit ctor/dtor definitions
-// TODO: Automatically mark as 'used', removing need for this variable
+// JSR TODO: Automatically mark as 'used', removing need for this variable
 static __exception_t __type_dummy;
 
 //static_assert(std::is_trivially_copyable<__exception_t>::value,"");
 //static_assert(std::is_trivially_destructible<__exception_t>::value,"");
 
 
-class __exception_obj_base {
+/**
+ * This struct provides additional constructors on top of the intentionally POD
+ * __exception_t class.
+ *
+ * This facilitates 
+ */
+struct __exception_obj_base
+{
     __exception_t exception{};
 
-protected:
+    ~__exception_obj_base() = default;
     constexpr __exception_obj_base(unsigned char* c, __exception_t e) noexcept
         : exception(e) { exception.buffer = c; }
-public:
+
     __exception_obj_base() = default;
     __exception_obj_base(const __exception_obj_base&) = default;
-    virtual ~__exception_obj_base() = default;
 };
+// reinterpret_cast<__exception_obj_base*>(__builtin_get_exception_obj()) must be safe
+//static_assert(std::is_trivial_layout<__exception_obj_base>::value, "");
+
 // Force Clang to emit ctor/dtor definitions
-// TODO: Automatically mark as 'used', removing need for this variable
+// JSR TODO: Automatically mark as 'used', removing need for this variable
 static __exception_obj_base __type_dummy2;
 
 
@@ -209,6 +224,13 @@ struct SuperObj : BaseObj {
     SuperObj(SuperObj&&) = default;
     SuperObj(const SuperObj&) = default;
 };
+
+inline void shit()
+{
+    SuperObj o;
+    SuperObj o2{reinterpret_cast<SuperObj&&>(o)};
+}
+
 struct DtorTestObj {
     int& i;
     DtorTestObj(int& i) : i(i) { }

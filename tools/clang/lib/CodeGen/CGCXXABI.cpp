@@ -125,6 +125,10 @@ bool CGCXXABI::isZeroInitializable(const MemberPointerType *MPT) {
   return true;
 }
 
+/**
+ * Here we build the implicit exception state object (ESO) parameter which will
+ * be injected into each function marked with the 'throws' specifier.
+ */
 void CGCXXABI::buildExceptionParam(CodeGenFunction &CGF, FunctionArgList &params) {
   IdentifierInfo* II = &CGM.getContext().Idents.get("__exception");
   auto& Cxt = CGM.getContext();

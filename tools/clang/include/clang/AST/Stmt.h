@@ -145,6 +145,11 @@ protected:
     unsigned ValueDependent : 1;
     unsigned InstantiationDependent : 1;
     unsigned ContainsUnexpandedParameterPack : 1;
+    /**
+     * An empty expression is a new type of expression produced solely
+     * by __builtin_empty_return. This type of expression will not produce
+     * any effect.
+     */
     unsigned IsEmpty : 1;
   };
   enum { NumExprBits = 18 };

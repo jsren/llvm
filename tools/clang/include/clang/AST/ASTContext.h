@@ -351,6 +351,7 @@ private:
   // The type for the C++ __exception_t type.
   public:
   TypeDecl *ExceptObjType = nullptr;
+  // The fields of the C++ __exception_t type.
   FieldDecl *ExceptMbrActive = nullptr;
   FieldDecl *ExceptMbrSize = nullptr;
   FieldDecl *ExceptMbrAlign = nullptr;
@@ -361,6 +362,7 @@ private:
   FieldDecl *ExceptMbrBaseTypes = nullptr;
   FieldDecl *ExceptMbrBuffer = nullptr;
   VarDecl *ExceptBufferDecl = nullptr;
+  // The new exception ABI function declarations
   FunctionDecl *ExceptInheritanceFunc = nullptr;
   FunctionDecl *ExceptAllocFunc = nullptr;
   FunctionDecl *ExceptFreeFunc = nullptr;
@@ -1534,9 +1536,11 @@ public:
                                                 QualType DeducedType,
                                                 bool IsDependent) const;
 
+  /// Return the __exception_t exception state object (ESO) type
   QualType getExceptionObjectType() const;
+  /// Return the type of the implicit exception state parameter (__exception_t*)
   QualType getExceptionParamType() const;
-  QualType getStdExceptionObjType() const;
+  /// Return the __exception_obj_base type
   QualType getExceptionObjBaseType() const;
 
   /// Return the unique reference to the type for the specified TagDecl

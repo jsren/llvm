@@ -41,11 +41,6 @@
 using namespace clang;
 using namespace CodeGen;
 
-static llvm::Constant *getSize(CodeGenFunction& CGF, uint64_t V) {
-  llvm::Type* T = CGF.ConvertType(CGF.getContext().getSizeType());
-  return llvm::ConstantInt::get(cast<llvm::IntegerType>(T), V);
-}
-
 /***/
 
 unsigned CodeGenTypes::ClangCallConvToLLVMCallConv(CallingConv CC) {
@@ -193,6 +188,8 @@ CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionProtoType> FTP,
                                       const FunctionDecl *FD) {
   SmallVector<CanQualType, 16> argTypes;
 
+  // If marked with 'throws' and deterministic exceptions are enabled,
+  // add the implicit exception state object parameter
   if (CGM.getLangOpts().ZCExceptions &&
     !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws && (!FD || !FD->isMain()))
