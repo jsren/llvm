@@ -1,4 +1,4 @@
-// expected: 57
+// expected: 2
 #include "stdexcept.hpp"
 
 int main()
@@ -6,13 +6,13 @@ int main()
     test_setup();
     try {
         try {
-            throw TrivialObj{57};
+            throw SuperObj();
         }
-        catch (...) {
+        catch (BaseObj o) {
             throw;
         }
     }
-    catch (TrivialObj o) {
-        return o.i;
+    catch (SuperObj o) {
+        return o.value();
     }
 }
