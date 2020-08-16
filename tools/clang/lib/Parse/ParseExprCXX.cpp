@@ -1611,8 +1611,12 @@ ExprResult Parser::ParseThrowExpression() {
   case tok::r_square:
   case tok::r_brace:
   case tok::colon:
-  case tok::comma:
+  case tok::comma: {
+    if (Actions.RethrowMarkers.size() == 0)
+      return ExprError();
+    Actions.RethrowMarkers.back() = true;
     return Actions.ActOnCXXThrow(getCurScope(), ThrowLoc, nullptr);
+  }
 
   default:
     ExprResult Expr(ParseAssignmentExpression());

@@ -22,6 +22,7 @@
 #include "clang/AST/StmtObjC.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/TargetBuiltins.h"
+#include "clang/Debug/Logging.hpp"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -597,7 +598,7 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 }
 
 void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
-  // Emit a local copy of the incoming exception state
+  // Emit a local  incoming exception state
   // This serves two purposes: the first is to improve optimisation
   // (in case an external function is called, which disables optimisation on the state fields)
   // The second is to allow nested rethrowing
@@ -626,6 +627,8 @@ void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) 
 
     // Push overriding exception decl
     CXXABIExceptDeclStack.push_back(VarArg);
+
+    Debug::Log("EMIT", "CGException EnterCXXZCTryStmt", "try:", &S, "eso:", ObjAddr.getPointer(), "eparam:", Addr.getPointer());
   }
 
   unsigned NumHandlers = S.getNumHandlers();
@@ -772,21 +775,27 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag, bool forceTerminate)
 
     Builder.CreateCondBr(Val, TrueBlock, FalseBlock, nullptr, nullptr);
     EmitBlock(TrueBlock);
+
+    Debug::Log("EMIT", "CGException EmitExceptionCheck I", "eso:", BaseLV.getPointer(), "check:", Val);
   }
 
   // Emit goto catch handler if one present
   if (catchHandlerBlockStack.size() > 0 && !forceTerminate) {
     // Throw within catch requires sync w/ local copy
-    MaybeCopyBackExceptionState();
+    // JSR TODO: Does it??
+    //MaybeCopyBackExceptionState();
     // Dtors cannot throw, thus we can call using 'throwing' state
+    Debug::Log("EMIT", "CGException EmitExceptionCheck II goto", "trylvl:", catchHandlerBlockStack.size());
     EmitBranchThroughCleanup(catchHandlerBlockStack.back());
   }
   // Check if within noexcept context. If so, just terminate.
   else if (!WithinThrows() || forceTerminate) {
+    Debug::Log("EMIT", "CGException EmitExceptionCheck II terminating");
     Builder.CreateCall(CGM.getTerminateFn());
   }
   // Otherwise return empty (propagate)
   else {
+    Debug::Log("EMIT", "CGException EmitExceptionCheck II propagating");
     // First check if within throwing dtor
     DtorExitCheck();
     // Throw within catch requires sync w/ local copy of Exception State Object
@@ -806,7 +815,9 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag, bool forceTerminate)
 
 void CodeGenFunction::MaybeCopyBackExceptionState()
 {
-  // Ignore throw within try
+  // Ignore throw within try - if we're inside a try, then we'll
+  // use the current exception state within the catch blocks.
+  // Only if we then rethrow (or do not catch) will we propatate.
   if (CXXABIExceptDeclStack.size() < 2 ||
     (CXXABIExceptDeclStack.size() - 1) <= catchHandlerBlockStack.size())
     return;
@@ -828,6 +839,8 @@ void CodeGenFunction::MaybeCopyBackExceptionState()
   auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
   llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
   Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
+
+  Debug::Log("EMIT", "CGException MaybeCopyBackExceptionState", "dst:", DstAddr.getPointer(), "src:", SrcAddr.getPointer());
 }
 
 llvm::Value *CodeGenFunction::GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out)
@@ -943,6 +956,7 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     Builder.CreateCall(CGM.getTerminateFn());
     Builder.CreateUnreachable();
     Builder.ClearInsertionPoint();
+    Debug::Log("EMIT", "CGException EmitZCThrow", "terminating");
     return;
   }
 
@@ -1037,14 +1051,29 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     // Initialise exception object within the exception object buffer
     Addr = Builder.CreateElementBitCast(Addr, ConvertType(ObjType));
     EmitAnyExprToMem(E->getSubExpr(), Addr, Qualifiers(), /*init*/ true);
+
+    Debug::Log("EMIT", "CGException EmitZCThrow newexception", "exception:", E->getSubExpr(), "eso:",
+               BaseLV.getPointer(), "exceptionAddr:", res, Addr.getPointer());
   }
   // Handle the case where we're re-throwing an existing object
   else {
 
+    // VarDecl *VD = CXXABIExceptObjDeclStack.back();
+    // Address ObjAddr = GetAddrOfLocalVar(VD);
+    // auto PtrTy = curExceptDecl()->getType();
+    // LValue EStateLV = MakeAddrLValue(ObjAddr, PtrTy);
+
     // Get exception state object as l-value
+    LValueBaseInfo BaseInfo;
+    TBAAAccessInfo TBAAInfo;
+    // Get the address of the current ESO pointer (__exception_t**)
     Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+
+    // Dereference and convert to pointer to ESO (__exception_t*)
     auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
-    LValue EStateLV = EmitLoadOfPointerLValue(PtrAddr, PtrTy);
+    Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+
+    LValue EStateLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
     // Load fields from ESO
     llvm::Value *MbrBuffer, *MbrSize, *MbrAlign, *MbrCtor;
@@ -1073,6 +1102,9 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     // Mark exception as active in the ESO
     LValue LV0 = EmitLValueForField(BaseLV, getContext().ExceptMbrActive);
     EmitStoreThroughLValue(RValue::get(Builder.getTrue()), LV0);
+
+    Debug::Log("EMIT", "CGException EmitZCThrow rethrow", "eso:", EStateLV.getPointer(), "exception:",
+               MbrBuffer, "exception@buffer:", res);
   }
   // Jump to correct location
   EmitExceptionCheck(/*checkFlag=*/false);
@@ -1106,6 +1138,7 @@ void CodeGenFunction::DestroyExceptionObject(llvm::Value *Object, QualType Type)
     Object = Builder.CreateBitCast(Object, ConvertType(getContext().VoidPtrTy));
     Builder.CreateCall(Dtor, { Object });
   }
+  Debug::Log("EMIT", "CGException DestroyExceptionObject", "obj:", Object, "trivial:", TrivialDtor);
 }
 
 void CodeGenFunction::DestroyExceptionObject(llvm::Value *Object, llvm::Value *Dtor)
@@ -1126,6 +1159,8 @@ void CodeGenFunction::DestroyExceptionObject(llvm::Value *Object, llvm::Value *D
   Builder.CreateCall(Dtor, makeArrayRef(Args));
   // Exception object dtors cannot throw - do not check for exception
   EmitBlock(ContBlock);
+
+  Debug::Log("EMIT", "CGException DestroyExceptionObject", "obj:", Object, "dtor:", Dtor);
 }
 
 /**
@@ -1146,6 +1181,8 @@ void CodeGenFunction::CopyExceptionObject(llvm::Value *Src, llvm::Value *Dst,
     Address SrcAddr(Src, getNaturalTypeAlignment(getContext().CharTy));
     Address DstAddr(Dst, getNaturalTypeAlignment(getContext().CharTy));
     Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
+
+    Debug::Log("EMIT", "CGException CopyExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
   }
   else {
     llvm::Value *Ctor = CGM.getAddrOfCXXStructor(CtorDecl, StructorType::Complete);
@@ -1155,6 +1192,7 @@ void CodeGenFunction::CopyExceptionObject(llvm::Value *Src, llvm::Value *Dst,
       Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().getPointerType(Type)));
       Args[2] = Builder.CreateBitCast(Args[2], ConvertType(getContext().getPointerType(Type)));
       Builder.CreateCall(Ctor, makeArrayRef(Args));
+      Debug::Log("EMIT", "CGException CopyExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState, "");
     }
     else {
       llvm::Value *Args[] = { Dst, Src };
@@ -1242,6 +1280,8 @@ void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
   Address SrcAddr(Src, getNaturalTypeAlignment(getContext().CharTy));
   Address DstAddr(Dst, getNaturalTypeAlignment(getContext().CharTy));
   Builder.CreateMemCpy(DstAddr, SrcAddr, Size);
+
+  Debug::Log("EMIT", "CGException MoveExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
 
   // Destroy original
   EmitBlock(ContBlock);
@@ -1336,6 +1376,9 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         // Note the comparison is !=
         Val = Builder.CreateICmp(
           llvm::CmpInst::ICMP_NE, ObjTID, CatchTID, "cmp");
+
+        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Begin", I, "eso:", EStateLV.getPointer(),
+                   "typeid:", ObjTID, "catchTypeid:", CatchTID);
       }
       llvm::BasicBlock *TrueBlock = createBasicBlock("Catch.Skip");
       llvm::BasicBlock *ContBlock = createBasicBlock("Catch.ExceptDecl");
@@ -1421,6 +1464,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     {
       LValue ActiveLV = EmitLValueForField(EStateLV, getContext().ExceptMbrActive);
       EmitStoreThroughLValue(RValue::get(Builder.getFalse()), ActiveLV);
+
+      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Clear-active", I, "active:", ActiveLV.getPointer());
     }
 
     // Load fields from ESO
@@ -1437,6 +1482,9 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
       MbrDtor = EmitLoadOfLValue(DtorLV, SourceLocation()).getScalarVal();
     }
+
+    Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Load-eso", I, "eso:",
+               EStateLV.getPointer(), "eobj:", MbrBuffer);
 
     // Emit catch variable
     Address VarAddr  = Address::invalid(); // Catch variable
@@ -1480,6 +1528,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         // FIXME: in general circumstances, this should be an EH cleanup.
         pushStackRestore(NormalCleanup, Stack);
       }
+      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Alloc-VLA", I, "vla:", VLAAddr.getPointer());
       // Push cleanup for VLA object
       //PushCatchAllCleanup(MbrDtor, VLAAddr);
       // Initialise with original object
@@ -1516,10 +1565,15 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
           // Initialise with original exception object
           MoveExceptionObject(MbrBuffer, ObjAddr.getPointer(), NakedType, EStateVal);
           EmitAutoVarCleanups(ObjVar);
+
+          Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Hidden-var", I, "catch-var:",
+                     VarAddr.getPointer(), "obj-var:", ObjAddr.getPointer());
       }
       // Otherwise there's no hidden var - object is either in VLA or in variable itself
       else {
         ObjAddr = AllocVLA ? VLAAddr : VarAddr;
+        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Variable", I, "catch-var:",
+                    VarAddr.getPointer(), "obj-var:", ObjAddr.getPointer());
       }
 
       // Initialise catch variable
@@ -1537,6 +1591,9 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         assert(ObjAddr.getPointer() != VarAddr.getPointer());
         llvm::Value *Addr = Builder.CreateBitCast(ObjAddr.getPointer(), ConvertTypeForMem(FullType));
         Builder.CreateStore(Addr, VarAddr);
+
+        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Bind-var-ref", I, "obj-var:",
+                   ObjAddr.getPointer(), "catch-var:", VarAddr.getPointer());
       }
     }
 
@@ -1544,35 +1601,37 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     {
       llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptFreeFunc);
       Builder.CreateCall(FP, { MbrBuffer, MbrSize, MbrAlign });
+
+      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Free-obj", I, "buffer:", MbrBuffer);
     }
 
     // JSR TODO: Why are we doing this?
-    // TODO: Is this true? Maybe not.
     if (C->hasRethrow()) {
-      auto Loc = C->getCatchLoc();
-      ASTContext& Ctx = getContext();
-      IdentifierInfo* IIObj = &Ctx.Idents.get(nextExceptionIdentifier("__exception_obj_t"));
-      // Allocate another exception state object on the stack
-      auto VarObj = VarDecl::Create(Ctx, const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
-            Loc, Loc, IIObj, Ctx.getExceptionObjBaseType(), nullptr, SC_Auto);
-      auto Obj = EmitAutoVarAlloca(*VarObj);
+      // auto Loc = C->getCatchLoc();
+      // ASTContext& Ctx = getContext();
+      // IdentifierInfo* IIObj = &Ctx.Idents.get(nextExceptionIdentifier("__exception_obj_t"));
+      // // Allocate another exception state object on the stack
+      // auto VarObj = VarDecl::Create(Ctx, const_cast<DeclContext*>(CurCodeDecl->getDeclContext()),
+      //       Loc, Loc, IIObj, Ctx.getExceptionObjBaseType(), nullptr, SC_Auto);
+      // auto Obj = EmitAutoVarAlloca(*VarObj);
 
-      // Copy existing exception state into new exception_obj instance
-      LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), Ctx.getExceptionParamType());
-      LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
+      // // Copy existing exception state into new exception_obj instance
+      // LValue BaseLV = MakeAddrLValue(Obj.getAllocatedAddress(), Ctx.getExceptionParamType());
+      // LValue LV2 = EmitLValueForField(BaseLV, getContext().ExceptBaseMbrException);
 
-      auto Size = getContext().getTypeSize(
-        getContext().getExceptionObjectType().getTypePtr()) / 8;
-      Builder.CreateMemCpy(LV2.getAddress(), EStateLV.getAddress(), Size);
+      // auto Size = getContext().getTypeSize(
+      //   getContext().getExceptionObjectType().getTypePtr()) / 8;
+      // Builder.CreateMemCpy(LV2.getAddress(), EStateLV.getAddress(), Size);
 
       // Set the address of the local exception object into 'buffer' field of exception state
-      LValue BufferLV = EmitLValueForField(LV2, getContext().ExceptMbrBuffer);
-      llvm::Value *Ptr = Builder.CreateBitCast(ObjAddr.getPointer(),
-        ConvertType(getContext().ExceptMbrBuffer->getType()));
+      LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
+      llvm::Value *Ptr = Builder.CreateBitCast(ObjAddr.getPointer(), ConvertType(getContext().ExceptMbrBuffer->getType()));
       EmitStoreThroughLValue(RValue::get(Ptr), BufferLV);
 
-      CXXABIExceptObjDeclStack.push_back(VarObj);
-      EmitAutoVarCleanups(Obj);
+      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Rethrowable-update-addr", I, "newloc:", Ptr);
+
+      // CXXABIExceptObjDeclStack.push_back(VarObj);
+      // EmitAutoVarCleanups(Obj);
     }
 
     // Emit catch body
@@ -1580,9 +1639,12 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     EmitStmt(C->getHandlerBlock());
     CatchScope.ForceCleanup();
 
-    if (C->hasRethrow()) {
-      CXXABIExceptObjDeclStack.pop_back();
-    }
+    Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock End", I, "eso:",
+               EStateLV.getPointer(), "eobj:", MbrBuffer);
+
+    // if (C->hasRethrow()) {
+    //   CXXABIExceptObjDeclStack.pop_back();
+    // }
 
     // Re-throw for function-try blocks
     if (IsFnTryBlock)

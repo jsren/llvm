@@ -23,6 +23,8 @@ linker jobs that can be run at once. Set `LLVM_PARALLEL_LINK_JOBS` to an appropr
 number for your machine.
 
 ``` bash
+sudo apt install make ninja-build cmake g++
+
 git clone <repository> llvm
 mkdir build-llvm && cd build-llvm
 
@@ -32,6 +34,18 @@ cmake -DLLVM_TARGETS_TO_BUILD="X86;ARM" -DLLVM_PARALLEL_LINK_JOBS=2 -G "Ninja" .
 # Build
 ninja
 ```
+
+Tested on Ubuntu 18. Compiled with gcc-7. Fails with newer versions.
+WSL2 users may require creating the file `/etc/wsl.conf` to contain:
+
+```
+# /etc/wsl.conf
+[automount]
+options = "metadata"
+enabled = true
+```
+
+and rebooting.
 
 ## Running
 

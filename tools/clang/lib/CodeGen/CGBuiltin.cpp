@@ -25,6 +25,7 @@
 #include "clang/Basic/TargetBuiltins.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
+#include "clang/Debug/Logging.hpp"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/DataLayout.h"
@@ -1467,6 +1468,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
     }
 
+    Debug::Log("CALL", "Builtin::BI__builtin_get_exception");
+
     LValueBaseInfo BaseInfo;
     TBAAAccessInfo TBAAInfo;
     // Get the address of the current ESO pointer (__exception_t**)
@@ -1509,15 +1512,21 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
     auto MbrCtor = EmitLoadOfLValue(CtorLV, SourceLocation()).getScalarVal();
 
+    Debug::Log("CALL", "Builtin::BI__builtin_rethrow", "param:", E->getArg(0), "estate:", EStateLV.getPointer());
+
     // Allocate exception object via call to __cxa_allocate_exception_obj(size, align)
     llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptAllocFunc);
     llvm::Value* res = Builder.CreateCall(FP, { MbrSize, MbrAlign });
+
+    Debug::Log("CALL", "__cxa_allocate_exception_obj(size, align)", "pc:", FP, "size:", MbrSize, "align:", MbrAlign);
 
     // Move exception object back to exception object buffer
     MoveExceptionObject(MbrBuffer, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
 
     // Update address in source exception state object
     EmitStoreThroughLValue(RValue::get(res), BufferLV);
+
+    Debug::Log("EMIT", "CGBuiltin update eso address", "obj:", res, "value:", BufferLV.getPointer());
 
     // Get address of destination ESO
     Address DstPtrAddr = GetAddrOfLocalVar(curExceptDecl());
@@ -1531,6 +1540,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     // Copy exception state object
     Builder.CreateMemCpy(DstAddr, EStateLV.getAddress(), SizeVal, false);
+
+    Debug::Log("EMIT", "CGBuiltin copy ESO", "src:", EStateLV.getPointer(), "dst:", DstAddr.getPointer());
 
     // Jump to correct location
     EmitExceptionCheck(/*checkFlag=*/false);
@@ -1548,9 +1559,24 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       return RValue::get(llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T)));
     }
     else {
-      VarDecl *VD = CXXABIExceptObjDeclStack.back();
-      Address ObjAddr = GetAddrOfLocalVar(VD);
-      return RValue::get(ObjAddr.getPointer());
+      LValueBaseInfo BaseInfo;
+      TBAAAccessInfo TBAAInfo;
+      // Get the address of the current ESO pointer (__exception_t**)
+      Address PtrAddr = GetAddrOfLocalVar(curExceptDecl());
+
+      // Dereference and convert to pointer to ESO (__exception_t*)
+      auto PtrTy = curExceptDecl()->getType()->castAs<PointerType>();
+      Address Addr = EmitLoadOfPointer(PtrAddr, PtrTy, &BaseInfo, &TBAAInfo);
+
+      LValue BaseLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
+
+      Debug::Log("CALL", "Builtin::BI__builtin_get_exception_obj", "returns:", BaseLV.getPointer());
+
+      return RValue::get(BaseLV.getPointer());
+
+      // VarDecl *VD = CXXABIExceptObjDeclStack.back();
+      // Address ObjAddr = GetAddrOfLocalVar(VD);
+      // return RValue::get(ObjAddr.getPointer());
     }
   }
   case Builtin::BI__builtin_empty_return:
