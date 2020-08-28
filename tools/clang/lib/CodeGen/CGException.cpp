@@ -602,6 +602,8 @@ void CodeGenFunction::EnterCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) 
   // This serves two purposes: the first is to improve optimisation
   // (in case an external function is called, which disables optimisation on the state fields)
   // The second is to allow nested rethrowing
+  withinTryStack.push_back(true);
+
   EmitBlock(createBasicBlock("Try.Prelude"));
   {
     auto Loc = S.getTryLoc();
@@ -779,14 +781,24 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag, bool forceTerminate)
     Debug::Log("EMIT", "CGException EmitExceptionCheck I", "eso:", BaseLV.getPointer(), "check:", Val);
   }
 
+  // If we're inside a catch, then ignore the current handler level (since we're propagating)
+  auto requiredHandlers = (withinTryStack.size() && !withinTryStack.back()) ? 2U : 1U;
+
   // Emit goto catch handler if one present
-  if (catchHandlerBlockStack.size() > 0 && !forceTerminate) {
+  if (catchHandlerBlockStack.size() >= requiredHandlers && !forceTerminate) {
     // Throw within catch requires sync w/ local copy
-    // JSR TODO: Does it??
-    //MaybeCopyBackExceptionState();
-    // Dtors cannot throw, thus we can call using 'throwing' state
-    Debug::Log("EMIT", "CGException EmitExceptionCheck II goto", "trylvl:", catchHandlerBlockStack.size());
-    EmitBranchThroughCleanup(catchHandlerBlockStack.back());
+    // Copy back exception state when propagating up the try/catch stack
+    MaybeCopyBackExceptionState();
+
+  // If we're inside a catch, then ignore the current handler level (since we're propagating)
+    if (requiredHandlers == 2) {
+      Debug::Log("EMIT", "CGException EmitExceptionCheck II goto", "trylvl:", catchHandlerBlockStack.size() - 1);
+      EmitBranchThroughCleanup(catchHandlerBlockStack[catchHandlerBlockStack.size() - 2]);
+    }
+    else {
+      Debug::Log("EMIT", "CGException EmitExceptionCheck II goto", "trylvl:", catchHandlerBlockStack.size());
+      EmitBranchThroughCleanup(catchHandlerBlockStack.back());
+    }
   }
   // Check if within noexcept context. If so, just terminate.
   else if (!WithinThrows() || forceTerminate) {
@@ -798,7 +810,7 @@ void CodeGenFunction::EmitExceptionCheck(bool checkFlag, bool forceTerminate)
     Debug::Log("EMIT", "CGException EmitExceptionCheck II propagating");
     // First check if within throwing dtor
     DtorExitCheck();
-    // Throw within catch requires sync w/ local copy of Exception State Object
+    // Propagate exception state
     MaybeCopyBackExceptionState();
     Expr *e = new (getContext()) CallExpr (getContext(),
       Stmt::StmtClass::CallExprClass, Stmt::EmptyShell());
@@ -818,9 +830,11 @@ void CodeGenFunction::MaybeCopyBackExceptionState()
   // Ignore throw within try - if we're inside a try, then we'll
   // use the current exception state within the catch blocks.
   // Only if we then rethrow (or do not catch) will we propatate.
-  if (CXXABIExceptDeclStack.size() < 2 ||
-    (CXXABIExceptDeclStack.size() - 1) <= catchHandlerBlockStack.size())
+  // This will check if we're inside a try block
+  if (CXXABIExceptDeclStack.size() < 2 || !withinTryStack.size() || withinTryStack.back()) {
+    Debug::Log("EMIT", "CGException MaybeCopyBackExceptionState skipping");
     return;
+  }
   // Get the outer ESO to which we're copying this one
   VarDecl *Dst = CXXABIExceptDeclStack[CXXABIExceptDeclStack.size() - 2];
   Address SrcPtrAddr = GetAddrOfLocalVar(curExceptDecl());
@@ -840,7 +854,8 @@ void CodeGenFunction::MaybeCopyBackExceptionState()
   llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
   Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
 
-  Debug::Log("EMIT", "CGException MaybeCopyBackExceptionState", "dst:", DstAddr.getPointer(), "src:", SrcAddr.getPointer());
+  Debug::Log("EMIT", "CGException MaybeCopyBackExceptionState", "src:", SrcAddr.getPointer(),
+             "dst:", DstAddr.getPointer(), "trylvl:", catchHandlerBlockStack.size());
 }
 
 llvm::Value *CodeGenFunction::GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out)
@@ -873,9 +888,6 @@ CXXConstructorDecl *CodeGenFunction::GetTypeCopyCtor(CXXRecordDecl *R, bool& Thr
       break;
     }
   }
-  // TODO: check visibility
-  assert(Target != nullptr &&
-    "Caught type must be trivial or have a non-deleted move or copy constructor.");
   return Target;
 }
 
@@ -1076,7 +1088,7 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     LValue EStateLV = MakeAddrLValue(Addr, PtrTy->getPointeeType(), BaseInfo, TBAAInfo);
 
     // Load fields from ESO
-    llvm::Value *MbrBuffer, *MbrSize, *MbrAlign, *MbrCtor;
+    llvm::Value *MbrBuffer, *MbrSize, *MbrAlign, *MbrCtor, *MbrDtor;
     LValue BufferLV = EmitLValueForField(EStateLV, getContext().ExceptMbrBuffer);
     {
       MbrBuffer = EmitLoadOfLValue(BufferLV, SourceLocation()).getScalarVal();
@@ -1086,6 +1098,8 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
       MbrAlign = EmitLoadOfLValue(AlignLV, SourceLocation()).getScalarVal();
       LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
       MbrCtor = EmitLoadOfLValue(CtorLV, SourceLocation()).getScalarVal();
+      LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
+      MbrDtor = EmitLoadOfLValue(DtorLV, SourceLocation()).getScalarVal();
     }
 
     // First copy the exception object back into the exception object buffer (EOB)
@@ -1094,7 +1108,8 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     llvm::Value* res = Builder.CreateCall(FP, { MbrSize, MbrAlign });
 
     // Move exception object back to exception object buffer
-    MoveExceptionObject(MbrBuffer, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
+    MoveExceptionObject(MbrBuffer, res, MbrCtor, MbrSize, EStateLV.getPointer());
+    DestroyExceptionObject(MbrBuffer, MbrDtor);
 
     // Update address in source exception state object
     EmitStoreThroughLValue(RValue::get(res), BufferLV);
@@ -1172,9 +1187,13 @@ void CodeGenFunction::CopyExceptionObject(llvm::Value *Src, llvm::Value *Dst,
   // If trivial, just memcpy (TODO: Look for C cleanup attr)
   bool Throws = false;
   auto RD = Type->getAsCXXRecordDecl();
+
+  bool hasCtor = !RD || RD->hasUserDeclaredCopyConstructor() || !RD->defaultedCopyConstructorIsDeleted();
+  assert(hasCtor && "Exception type missing copy constructor");
+
   CXXConstructorDecl *CtorDecl = RD ? GetTypeCopyCtor(RD, Throws) : nullptr;
 
-  if (!RD || CtorDecl->isTrivial()) {
+  if (!RD || !CtorDecl || CtorDecl->isTrivial()) {
     auto size = getContext().getTypeSize(Type.getTypePtr()) / 8;
     auto SizeType = cast<llvm::IntegerType>(ConvertType(getContext().getSizeType()));
     llvm::ConstantInt *SizeVal = llvm::ConstantInt::get(SizeType, size);
@@ -1182,7 +1201,7 @@ void CodeGenFunction::CopyExceptionObject(llvm::Value *Src, llvm::Value *Dst,
     Address DstAddr(Dst, getNaturalTypeAlignment(getContext().CharTy));
     Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
 
-    Debug::Log("EMIT", "CGException CopyExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
+    Debug::Log("EMIT", "CGException CopyExceptionObject Trivial", "src:", Src, "dst:", Dst);
   }
   else {
     llvm::Value *Ctor = CGM.getAddrOfCXXStructor(CtorDecl, StructorType::Complete);
@@ -1192,19 +1211,18 @@ void CodeGenFunction::CopyExceptionObject(llvm::Value *Src, llvm::Value *Dst,
       Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().getPointerType(Type)));
       Args[2] = Builder.CreateBitCast(Args[2], ConvertType(getContext().getPointerType(Type)));
       Builder.CreateCall(Ctor, makeArrayRef(Args));
-      Debug::Log("EMIT", "CGException CopyExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState, "");
+      Debug::Log("EMIT", "CGException CopyExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
     }
     else {
       llvm::Value *Args[] = { Dst, Src };
       Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().getPointerType(Type)));
       Args[1] = Builder.CreateBitCast(Args[1], ConvertType(getContext().getPointerType(Type)));
       Builder.CreateCall(Ctor, makeArrayRef(Args));
+      Debug::Log("EMIT", "CGException CopyExceptionObject", "src:", Src, "dst:", Dst);
     }
     // Call std::terminate if ctor threw
     EmitExceptionCheck(/*checkFlag=*/true, /*forceTerminate=*/true);
   }
-  // Clean up original
-  DestroyExceptionObject(Src, Type);
 }
 
 /**
@@ -1227,6 +1245,8 @@ void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
     Address SrcAddr(Src, getNaturalTypeAlignment(getContext().CharTy));
     Address DstAddr(Dst, getNaturalTypeAlignment(getContext().CharTy));
     Builder.CreateMemCpy(DstAddr, SrcAddr, SizeVal, false);
+
+    Debug::Log("EMIT", "CGException CopyExceptionObject Trivial", "src:", Src, "dst:", Dst);
   }
   else {
     llvm::Value *Ctor = CGM.getAddrOfCXXStructor(CtorDecl, StructorType::Complete);
@@ -1235,26 +1255,28 @@ void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
       Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().getPointerType(Type)));
       Args[2] = Builder.CreateBitCast(Args[2], ConvertType(getContext().getPointerType(Type)));
       Builder.CreateCall(Ctor, makeArrayRef(Args));
+      Debug::Log("EMIT", "CGException MoveExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
     }
     else {
       llvm::Value *Args[] = { Dst, Src };
       Args[0] = Builder.CreateBitCast(Args[0], ConvertType(getContext().getPointerType(Type)));
       Args[1] = Builder.CreateBitCast(Args[1], ConvertType(getContext().getPointerType(Type)));
       Builder.CreateCall(Ctor, makeArrayRef(Args));
+      Debug::Log("EMIT", "CGException MoveExceptionObject", "src:", Src, "dst:", Dst);
     }
     // Call std::terminate if ctor threw
     EmitExceptionCheck(/*checkFlag=*/true, /*forceTerminate=*/true);
   }
-  // Clean up original
-  DestroyExceptionObject(Src, Type);
 }
 
 /**
  * Move the exception object 
  */
 void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
-  llvm::Value *Ctor, llvm::Value *Dtor, llvm::Value *Size, llvm::Value *EState)
+  llvm::Value *Ctor, llvm::Value *Size, llvm::Value *EState)
 {
+  Debug::Log("EMIT", "CGException MoveExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
+
   llvm::Type *T = ConvertType(getContext().ExceptMbrCtor->getType());
   auto NullCtor = llvm::ConstantPointerNull::get(dyn_cast<llvm::PointerType>(T));
 
@@ -1281,13 +1303,8 @@ void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
   Address DstAddr(Dst, getNaturalTypeAlignment(getContext().CharTy));
   Builder.CreateMemCpy(DstAddr, SrcAddr, Size);
 
-  Debug::Log("EMIT", "CGException MoveExceptionObject", "src:", Src, "dst:", Dst, "estate:", EState);
-
   // Destroy original
   EmitBlock(ContBlock);
-  if (Dtor != nullptr) {
-    DestroyExceptionObject(Src, Dtor);
-  }
 }
 
 /**
@@ -1296,6 +1313,8 @@ void CodeGenFunction::MoveExceptionObject(llvm::Value *Src, llvm::Value *Dst,
  */
 void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   unsigned NumHandlers = S.getNumHandlers();
+
+  withinTryStack.back() = false;
 
   // Emit jump around catch for when we exit the try
   // without throwing
@@ -1310,11 +1329,6 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   // the handlers might scribble on this memory.
   SmallVector<EHCatchScope::Handler, 8> Handlers(
       CatchScope.begin(), CatchScope.begin() + NumHandlers);
-
-  // Pop catch handler block
-  assert(catchHandlerBlockStack.back().getBlock() == Handlers[0].Block);
-  catchHandlerBlockStack.pop_back();
-  EHStack.popCatch();
 
   for (unsigned I = 0; I != NumHandlers; ++I) {
     const CXXCatchStmt *C = S.getHandler(I);
@@ -1377,7 +1391,7 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         Val = Builder.CreateICmp(
           llvm::CmpInst::ICMP_NE, ObjTID, CatchTID, "cmp");
 
-        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Begin", I, "eso:", EStateLV.getPointer(),
+        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Filter I", I, "eso:", EStateLV.getPointer(),
                    "typeid:", ObjTID, "catchTypeid:", CatchTID);
       }
       llvm::BasicBlock *TrueBlock = createBasicBlock("Catch.Skip");
@@ -1448,12 +1462,18 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 
       // Handle filter predicate failure
       EmitBlock(TrueBlock);
+
       // Jump to next catch handler if one present
       if (NextBlock != nullptr) {
+          Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Filter II", I, "eso:", EStateLV.getPointer(),
+                     "cond:", Val, "nextblock:", NextBlock);
           Builder.CreateBr(NextBlock);
       }
       // Otherwise propagate
-      else EmitExceptionCheck(/*checkFlag=*/false);
+      else {
+        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Filter II - propagate", I, "cond:", Val);
+        EmitExceptionCheck(/*checkFlag=*/false);
+      }
 
       // Handle entering catch block
       EmitBlock(ContBlock);
@@ -1465,7 +1485,8 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       LValue ActiveLV = EmitLValueForField(EStateLV, getContext().ExceptMbrActive);
       EmitStoreThroughLValue(RValue::get(Builder.getFalse()), ActiveLV);
 
-      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Clear-active", I, "active:", ActiveLV.getPointer());
+      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Clear-active", I,
+                 "eso:", EStateLV.getPointer(), "active:", ActiveLV.getPointer());
     }
 
     // Load fields from ESO
@@ -1492,12 +1513,12 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
     Address VLAAddr  = Address::invalid(); // Original object
 
     QualType FullType  = CT;
+    // Get the catch variable type without references or qualifiers
     QualType NakedType = IsCatchAll ? CT : GetNakedCatchType(getContext(), FullType);
     bool IsTypeVirtual = IsCatchAll ? false : TypeIsVirtual(getContext().getCanonicalType(NakedType));
     bool IsByRef       = IsCatchAll ? false : FullType->isReferenceType();
-    // This actually indicates if the exception object is accessed via the builtin function
-    // e.g. from within a catch-all block.
-    bool HasRethrow    = C->hasRethrow();
+    // JSR TODO: For now assume we can always rethrow due to std::exception_ptr being used
+    bool HasRethrow    = true;
 
     // In the case where we are catching some type whose size is not known within the catch block
     // (i.e. catch-all or catching by reference to a base type) we need to allocate enough space
@@ -1528,17 +1549,18 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         // FIXME: in general circumstances, this should be an EH cleanup.
         pushStackRestore(NormalCleanup, Stack);
       }
-      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Alloc-VLA", I, "vla:", VLAAddr.getPointer());
+      Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Alloc-VLA", I, "size:", MbrSize,
+                 "vla:", VLAAddr.getPointer());
       // Push cleanup for VLA object
       //PushCatchAllCleanup(MbrDtor, VLAAddr);
       // Initialise with original object
-      MoveExceptionObject(MbrBuffer, VLAAddr.getPointer(),
-        MbrCtor, MbrDtor, MbrSize, EStateVal);
+      MoveExceptionObject(MbrBuffer, VLAAddr.getPointer(), MbrCtor, MbrSize, EStateVal);
+      DestroyExceptionObject(MbrBuffer, MbrDtor);
     }
+
     // Destroy object immediately if catch-all without re-throw since we do not access
     // the object within the catch-all block
-    // JSR TODO: std::exception_ptr might use the object indirectly
-    else if (IsCatchAll) {
+    if (IsCatchAll && !HasRethrow) {
       DestroyExceptionObject(MbrBuffer, MbrDtor);
     }
 
@@ -1549,8 +1571,12 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       EmitAutoVarCleanups(CatchVar);
       VarAddr = CatchVar.getObjectAddress(*this);
 
-      // Create and initialise hidden variable as required
-      if ((IsByRef && !IsTypeVirtual) || (!IsByRef && !IsTypeVirtual && HasRethrow))
+      // Create and initialize hidden variable as required.
+      // The hidden variable is not required if we're using VLA.
+      // For catch-by-reference we need the hidden variable simply to store the exception.
+      // For catch-by-value we need the hidden variable to store a copy allowing re-throwing
+      // the original exception.
+      if (!AllocVLA && (IsByRef || HasRethrow))
       {
           auto Loc = C->getCatchLoc();
           IdentifierInfo* IIObj = &getContext().Idents.get("__exception_obj");
@@ -1564,29 +1590,25 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
 
           // Initialise with original exception object
           MoveExceptionObject(MbrBuffer, ObjAddr.getPointer(), NakedType, EStateVal);
+          // Now copy the exception object into the catch variable
+          CopyExceptionObject(ObjAddr.getPointer(), VarAddr.getPointer(), NakedType, EStateVal);
+
+          DestroyExceptionObject(MbrBuffer, MbrDtor);
           EmitAutoVarCleanups(ObjVar);
 
-          Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Hidden-var", I, "catch-var:",
-                     VarAddr.getPointer(), "obj-var:", ObjAddr.getPointer());
+          Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Setup-hidden-var", I, "eobj:", MbrBuffer,
+                     "hidden-var:", ObjAddr.getPointer(), "catch-var:", VarAddr.getPointer());
       }
-      // Otherwise there's no hidden var - object is either in VLA or in variable itself
-      else {
-        ObjAddr = AllocVLA ? VLAAddr : VarAddr;
-        Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Variable", I, "catch-var:",
-                    VarAddr.getPointer(), "obj-var:", ObjAddr.getPointer());
+      // If we're not using neither the hidden variable nor VLA then we just need a straight copy=
+      // into the catch variable.
+      else if (!AllocVLA) {
+        ObjAddr = VarAddr;
+        MoveExceptionObject(MbrBuffer, VarAddr.getPointer(), NakedType, EStateVal);
+        DestroyExceptionObject(MbrBuffer, MbrDtor);
       }
 
-      // Initialise catch variable
-      if (!IsByRef) {
-        if (!HasRethrow) {
-          // Initialise catch variable with original exception object
-          MoveExceptionObject(MbrBuffer, VarAddr.getPointer(), NakedType, EStateVal);
-        }
-        else {
-          CopyExceptionObject(ObjAddr.getPointer(), VarAddr.getPointer(), NakedType, EStateVal);
-        }
-      }
-      else {
+      // Bind catch variable if a reference
+      if (IsByRef) {
         // Bind catch variable ref to exception object
         assert(ObjAddr.getPointer() != VarAddr.getPointer());
         llvm::Value *Addr = Builder.CreateBitCast(ObjAddr.getPointer(), ConvertTypeForMem(FullType));
@@ -1595,10 +1617,17 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
         Debug::Log("EMIT", "CGException ExitCXXZCTryStmt CatchBlock Bind-var-ref", I, "obj-var:",
                    ObjAddr.getPointer(), "catch-var:", VarAddr.getPointer());
       }
+      // If we're using VLA + catch variable when catching by value, we need to copy from the
+      // VLA - here the VLA allows us to re-throw the original exception
+      else if (AllocVLA) {
+
+      }
     }
 
     // De-allocate exception from buffer
     {
+      // Destruction will already have been done by the move/copy operation from the buffer
+
       llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptFreeFunc);
       Builder.CreateCall(FP, { MbrBuffer, MbrSize, MbrAlign });
 
@@ -1661,6 +1690,12 @@ void CodeGenFunction::ExitCXXZCTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
   }
   // Emit continuing block
   EmitBlock(ContBB);
+
+  // Pop per-try/catch state
+  assert(catchHandlerBlockStack.back().getBlock() == Handlers[0].Block);
+  catchHandlerBlockStack.pop_back();
+  EHStack.popCatch();
+  withinTryStack.pop_back();
 
   // Pop exception decl
   CXXABIExceptDeclStack.pop_back();

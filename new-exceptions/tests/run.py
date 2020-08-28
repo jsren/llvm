@@ -25,7 +25,6 @@ class Result:
 
 def run(filename : str, outfile : str, expected_rc : int, args : List[str]) -> Result:
     try:
-        print(args)
         proc = subprocess.run(args, timeout=10, check=True)
     except subprocess.TimeoutExpired:
         return Result(outfile, args, False, "Timeout exceeded when compiling")
@@ -80,9 +79,9 @@ def test(filepath : str, outfile : str):
             break
     for res in run_variants(filepath, outfile, expected_rc):
         if res.succeeded:
-            print("[PASS]", filepath)
+            print('.', end='', flush=True)
         else:
-            print("[FAIL]", filepath, res.msg)
+            print("[FAIL]", filepath, res.msg, "\n", ' '.join(['"{}"'.format(a) for a in res.args]))
 
 
 if __name__ == "__main__":

@@ -1511,17 +1511,22 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     auto MbrAlign = EmitLoadOfLValue(AlignLV, SourceLocation()).getScalarVal();
     LValue CtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrCtor);
     auto MbrCtor = EmitLoadOfLValue(CtorLV, SourceLocation()).getScalarVal();
+    LValue DtorLV = EmitLValueForField(EStateLV, getContext().ExceptMbrDtor);
+    auto MbrDtor = EmitLoadOfLValue(DtorLV, SourceLocation()).getScalarVal();
 
-    Debug::Log("CALL", "Builtin::BI__builtin_rethrow", "param:", E->getArg(0), "estate:", EStateLV.getPointer());
+    Debug::Log("CALL", "Builtin::BI__builtin_rethrow", "param:", E->getArg(0), "estate:",
+               EStateLV.getPointer());
 
     // Allocate exception object via call to __cxa_allocate_exception_obj(size, align)
     llvm::Constant *FP = CGM.GetAddrOfFunction(getContext().ExceptAllocFunc);
     llvm::Value* res = Builder.CreateCall(FP, { MbrSize, MbrAlign });
 
-    Debug::Log("CALL", "__cxa_allocate_exception_obj(size, align)", "pc:", FP, "size:", MbrSize, "align:", MbrAlign);
+    Debug::Log("CALL", "__cxa_allocate_exception_obj(size, align)", "pc:", FP, "size:", MbrSize,
+               "align:", MbrAlign);
 
     // Move exception object back to exception object buffer
-    MoveExceptionObject(MbrBuffer, res, MbrCtor, nullptr, MbrSize, EStateLV.getPointer());
+    MoveExceptionObject(MbrBuffer, res, MbrCtor, MbrSize, EStateLV.getPointer());
+    DestroyExceptionObject(MbrBuffer, MbrDtor);
 
     // Update address in source exception state object
     EmitStoreThroughLValue(RValue::get(res), BufferLV);

@@ -1402,6 +1402,7 @@ public:
   };
 
 private:
+  llvm::SmallVector<bool, 2> withinTryStack{};
   llvm::SmallVector<LabelDecl *, 2> catchHandlerStack{};
   llvm::SmallVector<JumpDest, 2> catchHandlerBlockStack{};
   llvm::SmallVector<LabelDecl *, 2> catchHandlerEndStack{};
@@ -1431,10 +1432,10 @@ private:
 
   void DestroyExceptionObject(llvm::Value*, QualType);
   void DestroyExceptionObject(llvm::Value*, llvm::Value*);
-  void CopyExceptionObject(llvm::Value*, llvm::Value*, QualType, llvm::Value*);
-  void MoveExceptionObject(llvm::Value*, llvm::Value*, QualType, llvm::Value*);
-  void MoveExceptionObject(llvm::Value*, llvm::Value*, llvm::Value*, llvm::Value*,
-    llvm::Value*, llvm::Value*);
+  void CopyExceptionObject(llvm::Value* Src, llvm::Value* Dst, QualType Type, llvm::Value* EState);
+  void MoveExceptionObject(llvm::Value* Src, llvm::Value* Dst, QualType Type, llvm::Value* EState);
+  void MoveExceptionObject(llvm::Value* Src, llvm::Value* Dst, llvm::Value* Ctor,
+    llvm::Value* Size, llvm::Value* EState);
 
   llvm::Value *GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_out);
   llvm::Value *GetExceptionCtor(CXXRecordDecl *R, bool &IsNull_out);
