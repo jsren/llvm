@@ -48,9 +48,20 @@ using namespace CodeGen;
 //===--------------------------------------------------------------------===//
 
 /// Returns the canonical formal type of the given function
-static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *FD) {
-  return FD->getType()->getCanonicalTypeUnqualified()
-           .getAs<FunctionProtoType>();
+static CanQual<FunctionProtoType> GetFormalFuncType(const ValueDecl *D) {
+  // Handle function pointers
+  auto Type = D->getType()->getCanonicalTypeUnqualified();
+
+  while (true) {
+    auto PtrTy = Type.getAs<PointerType>();
+    if (PtrTy) {
+      Type = PtrTy->getPointeeType();
+    }
+    else {
+      break;
+    }
+  }
+  return Type.getAs<FunctionProtoType>();
 }
 
 llvm::Value *CodeGenFunction::EmitCastToVoidPtr(llvm::Value *value) {
@@ -4693,7 +4704,13 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
 
   // Add the implicit exception state object (ESO) parameter to the list
   // of args if enabled
-  CanQual<FunctionProtoType> FTP = GetFormalType(FD);
+  const ValueDecl* VDecl = dyn_cast_or_null<ValueDecl>(TargetDecl);
+  if (VDecl == nullptr) {
+    TargetDecl->dump();
+    assert(false && "Call expr function decl is not a value decl.");
+  }
+
+  CanQual<FunctionProtoType> FTP = GetFormalFuncType(VDecl);
   if (getLangOpts().ZCExceptions &&
     !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {

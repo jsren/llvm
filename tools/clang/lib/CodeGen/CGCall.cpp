@@ -4525,9 +4525,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   bool throws = Callee.hasExceptParam;
   if (!throws)
   {
-    auto *FD = cast<FunctionDecl>(Callee.getAbstractInfo().getCalleeDecl());
+    auto *FD = dyn_cast_or_null<ValueDecl>(Callee.getAbstractInfo().getCalleeDecl());
     if (FD) {
-      auto *FPT = cast<FunctionProtoType>(FD->getType());
+      auto *FPT = FD->getType()->getAs<FunctionProtoType>();
       if (FPT) {
         throws |= (FPT->getExceptionSpecType() == EST_Throws);
       }

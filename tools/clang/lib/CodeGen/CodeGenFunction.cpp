@@ -1593,6 +1593,7 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
     // JSR TODO: Regex? really?
     // Get the identifier-safe type name
     Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
+    Name = std::regex_replace(Name, std::regex(":"), "__1");
     idName = "__typeid_bases_for_" + Name;
   }
 
@@ -1647,6 +1648,7 @@ VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
   // pointer depth to be matched
   auto count = std::count(Name.begin(), Name.end(), '*');
   Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
+  Name = std::regex_replace(Name, std::regex(":"), "__1");
   Name = "__typeid_for_" + (count != 0 ?
     std::to_string(count) : std::string()) + Name;
   const char* CName = Name.c_str();
