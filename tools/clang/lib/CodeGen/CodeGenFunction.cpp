@@ -1672,6 +1672,9 @@ VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
       CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
       CurGD.getDecl()->getLocation(), II, CT, nullptr, SC_Extern);
 
+  // Emit global definition
+  CGM.EmitZCExceptionRTTIDefinition(CName, TUnitDC, CurGD.getDecl()->getLocation());
+
   assert(Decl->getLanguageLinkage() == CLanguageLinkage);
   return Decl;
 }

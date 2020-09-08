@@ -53,7 +53,7 @@ struct __exception_t {
 };
 // Force Clang to emit ctor/dtor definitions
 // JSR TODO: Automatically mark as 'used', removing need for this variable
-static __exception_t __type_dummy;
+//static __exception_t __type_dummy;
 
 //static_assert(std::is_trivially_copyable<__exception_t>::value,"");
 //static_assert(std::is_trivially_destructible<__exception_t>::value,"");
@@ -81,50 +81,50 @@ struct __exception_obj_base
 
 // Force Clang to emit ctor/dtor definitions
 // JSR TODO: Automatically mark as 'used', removing need for this variable
-static __exception_obj_base __type_dummy2;
+//static __exception_obj_base __type_dummy2;
 
 
 extern "C" {
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_nullptr_t = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_int = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_1int = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_bool = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_EmptyObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_TrivialObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_NoTrivialObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_NoTrivialDtorObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_NoTrivialMoveObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_NoMoveObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_CtorThrowableObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_MoveThrowableObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_CtorThrowsObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_MoveThrowsObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_DtorThrowsObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_nullptr_t = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_int = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_1int = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_bool = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_EmptyObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_TrivialObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_NoTrivialObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_NoTrivialDtorObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_NoTrivialMoveObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_NoMoveObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_CtorThrowableObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_MoveThrowableObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_CtorThrowsObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_MoveThrowsObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_DtorThrowsObj = 0;
     [[gnu::weak, gnu::section(".typeids")]] alignas(1)
         extern const char __typeid_for_BaseObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_1BaseObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_SuperObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_1SuperObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_DtorTestObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_1BaseObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_SuperObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_1SuperObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_DtorTestObj = 0;
 
     [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
     extern const char* __typeid_empty_bases[1] = { nullptr };

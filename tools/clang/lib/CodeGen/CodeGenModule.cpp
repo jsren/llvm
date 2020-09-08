@@ -4934,6 +4934,30 @@ llvm::Constant *CodeGenModule::EmitUuidofInitializer(StringRef Uuid) {
   return llvm::ConstantStruct::getAnon(Fields);
 }
 
+
+void CodeGenModule::EmitZCExceptionRTTIDefinition(const char* DeclName, DeclContext* DC, SourceLocation SL)
+{
+  IdentifierInfo* II = &this->getContext().Idents.get(DeclName);
+  auto CT = this->getContext().CharTy;
+
+  // Set C linkage
+  LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+    this->getContext(), DC, SL, SL,
+    LinkageSpecDecl::LanguageIDs::lang_c, true);
+
+  // Create vardecl
+  VarDecl *Decl = VarDecl::Create(this->getContext(), ExternCCtx, SL, SL, II, CT, nullptr, SC_Extern);
+
+  IntegerLiteral* Init = IntegerLiteral::Create(this->getContext(), llvm::APInt(8, 0, false), CT, SL);
+  Decl->setInit(Init);
+  Decl->setIsUsed();
+
+  Decl->addAttr(WeakAttr::CreateImplicit(getContext()));
+  Decl->setStorageClass(clang::StorageClass::SC_Extern);
+
+  addDeferredDeclToEmit(GlobalDecl(Decl));
+}
+
 llvm::Constant *CodeGenModule::GetAddrOfRTTIDescriptor(QualType Ty,
                                                        bool ForEH) {
   // Return a bogus pointer if RTTI is disabled, unless it's for EH.

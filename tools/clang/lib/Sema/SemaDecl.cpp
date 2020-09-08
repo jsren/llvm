@@ -14589,6 +14589,7 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
         C.ExceptBaseMbrException = field;
       }
     }
+    RD->setIsUsed();
     assert(C.ExceptBaseMbrException
       && "__exception_obj_base missing required field.");
   }
@@ -14640,6 +14641,9 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
       && C.ExceptMbrPtr
       && C.ExceptMbrAlign
       && "__exception_t missing required field.");
+    // Mark class as used to ensure it is retained despite not being
+    // used explicitly
+    RD->setIsUsed();
   }
 }
 
