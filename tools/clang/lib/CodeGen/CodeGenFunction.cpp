@@ -1570,56 +1570,56 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
  * This function get the VarDecl for the inheritance table of the given
  * type used as runtime type information in deterministic exceptions.
  */
-VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
-  Qualifiers _;
-  T = getContext().getUnqualifiedArrayType(T, _);
-  T = T.getCanonicalType();
+// VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
+//   Qualifiers _;
+//   T = getContext().getUnqualifiedArrayType(T, _);
+//   T = T.getCanonicalType();
 
-  // If pointer type or has no base types, just assign empty
-  std::string idName = "__typeid_empty_bases";
+//   // If pointer type or has no base types, just assign empty
+//   std::string idName = "__typeid_empty_bases";
 
-  // If pointer-to-T, get bases for pointee type
-  bool ptrToT = T->isPointerType() && !T->isNullPtrType();
-  QualType T1 = ptrToT ? T->getPointeeType().getCanonicalType() : T;
+//   // If pointer-to-T, get bases for pointee type
+//   bool ptrToT = T->isPointerType() && !T->isNullPtrType();
+//   QualType T1 = ptrToT ? T->getPointeeType().getCanonicalType() : T;
 
-  const CXXRecordDecl *RD = T1.getTypePtr()->getAsCXXRecordDecl();
-  bool hasBases = RD && RD->getNumBases();
+//   const CXXRecordDecl *RD = T1.getTypePtr()->getAsCXXRecordDecl();
+//   bool hasBases = RD && RD->getNumBases();
 
-  // If the type is not a pointer and has base classes,
-  // then reference the inheritance table which should have been produced
-  if (!T1->isPointerType() && hasBases != 0) {
-    std::string Name = QualType::getAsString(T1.split(),
-      getContext().getPrintingPolicy());
-    // JSR TODO: Regex? really?
-    // Get the identifier-safe type name
-    Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
-    Name = std::regex_replace(Name, std::regex(":"), "__1");
-    idName = "__typeid_bases_for_" + Name;
-  }
+//   // If the type is not a pointer and has base classes,
+//   // then reference the inheritance table which should have been produced
+//   if (!T1->isPointerType() && hasBases != 0) {
+//     std::string Name = QualType::getAsString(T1.split(),
+//       getContext().getPrintingPolicy());
+//     // JSR TODO: Regex? really?
+//     // Get the identifier-safe type name
+//     Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
+//     Name = std::regex_replace(Name, std::regex(":"), "__1");
+//     idName = "__typeid_bases_for_" + Name;
+//   }
 
-  const char* CName = idName.c_str();
-  IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
-  auto CT = getContext().getPointerType(getContext().CharTy);
+//   const char* CName = idName.c_str();
+//   IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
+//   auto CT = getContext().getPointerType(getContext().CharTy);
 
-  // Get file context
-  DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
-  while (!TUnitDC->isFileContext()) {
-    TUnitDC = TUnitDC->getLexicalParent();
-  }
-  // Set C linkage
-  LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
-    CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
-    CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
-    true);
+//   // Get file context
+//   DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
+//   while (!TUnitDC->isFileContext()) {
+//     TUnitDC = TUnitDC->getLexicalParent();
+//   }
+//   // Set C linkage
+//   LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+//     CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
+//     CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
+//     true);
 
-  // Create vardecl
-  VarDecl *Decl = VarDecl::Create(
-      CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
-      CurGD.getDecl()->getLocation(), II, CT, nullptr, SC_Extern);
+//   // Create vardecl
+//   VarDecl *Decl = VarDecl::Create(
+//       CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
+//       CurGD.getDecl()->getLocation(), II, CT, nullptr, SC_Extern);
 
-  assert(Decl->getLanguageLinkage() == CLanguageLinkage);
-  return Decl;
-}
+//   assert(Decl->getLanguageLinkage() == CLanguageLinkage);
+//   return Decl;
+// }
 
 static QualType StripAllQualifiers(ASTContext &ctx, QualType T)
 {
@@ -1675,6 +1675,80 @@ VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
   // Emit global definition
   CGM.EmitZCExceptionRTTIDefinition(CName, TUnitDC, CurGD.getDecl()->getLocation());
 
+  assert(Decl->getLanguageLinkage() == CLanguageLinkage);
+  return Decl;
+}
+
+VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
+  Qualifiers _;
+  T = getContext().getUnqualifiedArrayType(T, _);
+  T = T.getCanonicalType();
+
+  // If pointer type or has no base types, just assign empty
+  std::string Name = "__typeid_empty_bases";
+
+  // If pointer-to-T, get bases for pointee type
+  bool ptrToT = T->isPointerType() && !T->isNullPtrType();
+  QualType T1 = ptrToT ? T->getPointeeType().getCanonicalType() : T;
+
+  const CXXRecordDecl *RD = T1.getTypePtr()->getAsCXXRecordDecl();
+  bool HasBases = RD && RD->getNumBases();
+
+  // If we have base classes, then get the identifier name
+  if (HasBases) {
+    Name = QualType::getAsString(T.split(),
+      getContext().getPrintingPolicy());
+
+    // JSR TODO: Regex? really?
+    // Get the identifier-safe type name
+    Name = std::regex_replace(Name, std::regex("[\\s\\*]"), "");
+    Name = std::regex_replace(Name, std::regex(":"), "__1");
+    Name = "__typeid_bases_for_" + Name;
+  }
+  const char* CName = Name.c_str();
+  IdentifierInfo* II = &CGM.getContext().Idents.get(CName);
+  auto CT = getContext().getPointerType(getContext().CharTy);
+
+  // Get file context
+  DeclContext* TUnitDC = const_cast<DeclContext*>(CurCodeDecl->getDeclContext());
+  while (!TUnitDC->isFileContext()) {
+    TUnitDC = TUnitDC->getLexicalParent();
+  }
+  // Set C linkage
+  LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+    CGM.getContext(), TUnitDC, CurGD.getDecl()->getLocation(),
+    CurGD.getDecl()->getLocation(), LinkageSpecDecl::LanguageIDs::lang_c,
+    true);
+
+  // Create vardecl
+  VarDecl *Decl = VarDecl::Create(
+      CGM.getContext(), ExternCCtx, CurGD.getDecl()->getLocation(),
+      CurGD.getDecl()->getLocation(), II, CT, nullptr, SC_Extern);
+
+  if (HasBases) {
+    // Get the names of the typeID identifiers for the bases of this type
+    // We cannot assume an order here
+    std::vector<std::string> baseDeclStrings{};
+    std::vector<const char*> baseDeclNames{};
+    for (const CXXBaseSpecifier& base : RD->bases()) {
+      // Ensure that the typeID is emitted
+      VarDeclForTypeID(base.getType());
+
+      // Get the name of the typeID to reference
+      std::string BName = QualType::getAsString(base.getType().split(),
+        getContext().getPrintingPolicy());
+
+      BName = std::regex_replace(BName, std::regex("[\\s\\*]"), "");
+      BName = std::regex_replace(BName, std::regex(":"), "__1");
+      BName = "__typeid_for_" + BName;
+      baseDeclStrings.emplace_back(std::move(BName));
+      baseDeclNames.push_back(baseDeclStrings.back().c_str());
+    }
+
+    // Emit global definition
+    CGM.EmitZCExceptionRTTIBasesDefinition(CName, baseDeclNames.data(), baseDeclNames.size(),
+      TUnitDC, CurGD.getDecl()->getLocation());
+  }
   assert(Decl->getLanguageLinkage() == CLanguageLinkage);
   return Decl;
 }

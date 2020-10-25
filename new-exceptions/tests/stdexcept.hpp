@@ -51,9 +51,6 @@ struct __exception_t {
     // Alignment of exception object
     char alignment;
 };
-// Force Clang to emit ctor/dtor definitions
-// JSR TODO: Automatically mark as 'used', removing need for this variable
-//static __exception_t __type_dummy;
 
 //static_assert(std::is_trivially_copyable<__exception_t>::value,"");
 //static_assert(std::is_trivially_destructible<__exception_t>::value,"");
@@ -78,10 +75,6 @@ struct __exception_obj_base
 };
 // reinterpret_cast<__exception_obj_base*>(__builtin_get_exception_obj()) must be safe
 //static_assert(std::is_trivial_layout<__exception_obj_base>::value, "");
-
-// Force Clang to emit ctor/dtor definitions
-// JSR TODO: Automatically mark as 'used', removing need for this variable
-//static __exception_obj_base __type_dummy2;
 
 
 extern "C" {
@@ -115,8 +108,8 @@ extern "C" {
     //     extern const char __typeid_for_MoveThrowsObj = 0;
     // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
     //     extern const char __typeid_for_DtorThrowsObj = 0;
-    [[gnu::weak, gnu::section(".typeids")]] alignas(1)
-        extern const char __typeid_for_BaseObj = 0;
+    // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
+    //     extern const char __typeid_for_BaseObj = 0;
     // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
     //     extern const char __typeid_for_1BaseObj = 0;
     // [[gnu::weak, gnu::section(".typeids")]] alignas(1)
@@ -130,11 +123,11 @@ extern "C" {
     extern const char* __typeid_empty_bases[1] = { nullptr };
 
     // Alternative form
-    [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
-    extern const char* __typeid_bases_for_SuperObj[] = {
-        &__typeid_for_BaseObj,
-        nullptr
-    };
+    // [[gnu::weak, gnu::section(".typeid-bases")]] alignas(alignof(char*))
+    // extern const char* __typeid_bases_for_SuperObj[] = {
+    //     &__typeid_for_BaseObj,
+    //     nullptr
+    // };
 
     [[gnu::noinline]]
     inline bool __type_is_not_base(void* type, const char** super_bases) noexcept {

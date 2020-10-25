@@ -4952,6 +4952,56 @@ void CodeGenModule::EmitZCExceptionRTTIDefinition(const char* DeclName, DeclCont
   Decl->setInit(Init);
   Decl->setIsUsed();
 
+
+  Decl->addAttr(WeakAttr::CreateImplicit(getContext()));
+  Decl->setStorageClass(clang::StorageClass::SC_Extern);
+
+  addDeferredDeclToEmit(GlobalDecl(Decl));
+}
+
+void CodeGenModule::EmitZCExceptionRTTIBasesDefinition(const char* DeclName, const char** BaseDeclNames,
+                                                       size_t BaseCount, DeclContext* DC, SourceLocation SL)
+{
+  IdentifierInfo* II = &this->getContext().Idents.get(DeclName);
+  auto CT = this->getContext().CharTy;
+  auto CharPtrTy = this->getContext().getPointerType(CT).withConst();
+  // Create the type representing the array initializer. Size must be +1 for nullptr.
+  auto CharPtrArrTy = this->getContext().getConstantArrayType(CharPtrTy, llvm::APInt(8, BaseCount + 1),
+                                                              ArrayType::ArraySizeModifier::Normal, 0);
+  // Set C linkage
+  LinkageSpecDecl *ExternCCtx = LinkageSpecDecl::Create(
+    this->getContext(), DC, SL, SL,
+    LinkageSpecDecl::LanguageIDs::lang_c, true);
+
+  // JSR TODO: Attach these to the CGM instance
+  auto expressions = std::unique_ptr<std::vector<clang::Expr*>>(new std::vector<clang::Expr*>());
+
+  for (size_t i = 0; i < BaseCount; i++)
+  {
+    printf("GOT BASE NAME %s\n", BaseDeclNames[i]);
+
+    IdentifierInfo* TIDII = &this->getContext().Idents.get(BaseDeclNames[i]);
+    VarDecl *Decl = VarDecl::Create(this->getContext(), ExternCCtx, SL, SL, TIDII, CT, nullptr, SC_Extern);
+
+    auto DRE = DeclRefExpr::Create(this->getContext(), clang::NestedNameSpecifierLoc(), SL, Decl, false, SL, CT,
+                                   ExprValueKind::VK_LValue);
+
+    expressions->push_back(new (this->getContext()) UnaryOperator(DRE, UnaryOperatorKind::UO_AddrOf, CharPtrTy,
+                                                                  ExprValueKind::VK_RValue, ExprObjectKind::OK_Ordinary,
+                                                                  SL, false));
+  }
+  // Always terminate with nullptr
+  auto NullPtr = new (this->getContext()) CXXNullPtrLiteralExpr(this->getContext().NullPtrTy, SL);
+  expressions->push_back(ImplicitCastExpr::Create(this->getContext(), CharPtrTy, CastKind::CK_NullToPointer,
+                                                  NullPtr, nullptr, VK_RValue));
+ 
+  auto InitExpr = new (this->getContext()) InitListExpr(this->getContext(), SL, *expressions, SL);
+  InitExpr->setType(CharPtrArrTy);
+
+  VarDecl *Decl = VarDecl::Create(this->getContext(), ExternCCtx, SL, SL, II, CharPtrArrTy, nullptr, SC_Extern);
+  Decl->setInit(InitExpr);
+  Decl->setIsUsed();
+
   Decl->addAttr(WeakAttr::CreateImplicit(getContext()));
   Decl->setStorageClass(clang::StorageClass::SC_Extern);
 

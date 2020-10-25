@@ -1112,6 +1112,11 @@ public:
   /// to be emitted at the end of the module
   void EmitZCExceptionRTTIDefinition(const char* DeclName, DeclContext* DC, SourceLocation SL);
 
+  /// Add a deterministic exception base class table RTTI definition
+  /// to be emitted at the end of the module
+  void EmitZCExceptionRTTIBasesDefinition(const char* DeclName, const char** BaseDeclNames,
+                                          size_t BaseCount, DeclContext* DC, SourceLocation SL);
+
   void RefreshTypeCacheForClass(const CXXRecordDecl *Class);
 
   /// Appends Opts to the "llvm.linker.options" metadata value.
