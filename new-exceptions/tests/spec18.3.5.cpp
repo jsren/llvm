@@ -3,7 +3,7 @@
 A ... in a handler’s exception-declaration functions similarly to ... in a function parameter declaration; it
 specifies a match for any exception. If present, a ... handler shall be the last handler for its try block.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

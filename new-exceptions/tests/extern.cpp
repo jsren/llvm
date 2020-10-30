@@ -1,4 +1,4 @@
-#include "stdexcept.hpp"
+#include "common.hpp"
 #include <cstdio>
 
 long long test() throws

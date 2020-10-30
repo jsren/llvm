@@ -3,7 +3,7 @@
 As control passes from the point where an exception is thrown to a handler, destructors are invoked by a
 process, specified in this section, called stack unwinding.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 void foo(int& count) throws
 {

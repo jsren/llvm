@@ -24,6 +24,7 @@
 #include "clang/Lex/PTHManager.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/PreprocessorOptions.h"
+#include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Serialization/ASTReader.h"
 #include "llvm/ADT/APFloat.h"
 using namespace clang;
@@ -1099,6 +1100,10 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   TI.getTargetDefines(LangOpts, Builder);
 }
 
+extern "C" {
+#include <unistd.h>
+}
+
 /// InitializePreprocessor - Initialize the preprocessor getting it and the
 /// environment ready to process a single file. This returns true on error.
 ///
@@ -1172,6 +1177,11 @@ void clang::InitializePreprocessor(
   // any -include directives.
   for (unsigned i = 0, e = InitOpts.MacroIncludes.size(); i != e; ++i)
     AddImplicitIncludeMacros(Builder, InitOpts.MacroIncludes[i]);
+
+  // Add implicit header for deterministic (zc) exceptions
+  std::string Loc = PP.getHeaderSearchInfo().getHeaderSearchOpts().ResourceDir;
+  Loc += "/include/zcexception.hpp";
+  AddImplicitInclude(Builder, Loc);
 
   // Process -include-pch/-include-pth directives.
   if (!InitOpts.ImplicitPCHInclude.empty())

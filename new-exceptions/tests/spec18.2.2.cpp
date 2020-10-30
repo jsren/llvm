@@ -5,7 +5,7 @@ the try block was entered. If an exception is thrown during the destruction of t
 for a return statement (9.6.3), the destructor for the returned object (if any) is also invoked. The objects
 are destroyed in the reverse order of the completion of their construction.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 auto foo(int& count) throws
 {

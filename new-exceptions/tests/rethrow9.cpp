@@ -1,5 +1,5 @@
 // expected: 57
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

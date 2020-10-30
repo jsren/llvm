@@ -4,7 +4,7 @@ A goto, break, return, or continue statement can be used to transfer control out
 block or handler. When this happens, each variable declared in the try block will be destroyed in the context
 that directly contains its declaration.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

@@ -238,7 +238,6 @@ void InitHeaderSearch::AddDefaultCIncludePaths(const llvm::Triple &triple,
     llvm::sys::path::append(P, "include");
     AddUnmappedPath(P, ExternCSystem, false);
   }
-
   // All remaining additions are for system include directories, early exit if
   // we aren't using them.
   if (!HSOpts.UseStandardSystemIncludes)

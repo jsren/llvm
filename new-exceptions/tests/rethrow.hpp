@@ -1,7 +1,7 @@
 /* rethrow.hpp - (c) 2018 James Renwick */
 #pragma once
 #include <memory>
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 namespace std
 {

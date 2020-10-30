@@ -1,4 +1,4 @@
-#include "stdexcept.hpp"
+#include "common.hpp"
 #include <benchmark/benchmark.h>
 
 long long test() throws;

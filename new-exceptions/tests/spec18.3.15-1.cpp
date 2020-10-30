@@ -5,7 +5,7 @@ object, of type E, as follows:
 if T is a base class of E, the variable is copy-initialized (11.6) from the corresponding base class subobject
 of the exception object
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

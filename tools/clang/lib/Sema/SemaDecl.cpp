@@ -5202,10 +5202,10 @@ Decl *Sema::ActOnDeclarator(Scope *S, Declarator &D) {
   if (getLangOpts().OpenCL)
     setCurrentOpenCLExtensionForDecl(Dcl);
 
-  if (D.getName().getKind() == UnqualifiedIdKind::IK_Identifier) {
-    if (D.getName().Identifier->getName().str() == "__exception_obj_buffer") {
-      Context.ExceptBufferDecl = cast<VarDecl>(Dcl);
-    }
+  if (D.getName().getKind() == UnqualifiedIdKind::IK_Identifier &&
+      D.getName().Identifier &&
+      D.getName().Identifier->getName().str() == "__exception_obj_buffer") {
+    Context.ExceptBufferDecl = cast<VarDecl>(Dcl);
   }
   return Dcl;
 }

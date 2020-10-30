@@ -2,7 +2,7 @@
 /*
 Throwing an exception transfers control to a handler. An object is passed and the type of that object determines which handlers can catch it.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

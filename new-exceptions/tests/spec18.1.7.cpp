@@ -3,7 +3,7 @@
 If the exception handling mechanism handling an uncaught exception (18.5.2) directly invokes a function
 that exits via an exception, std::terminate is called (18.5.1)
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 
 int main()

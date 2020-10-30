@@ -4,7 +4,7 @@ A handler will be
 invoked only by throwing an exception in code executed in the handler’s try block or in functions called from
 the handler’s try block.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

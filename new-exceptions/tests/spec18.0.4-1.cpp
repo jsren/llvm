@@ -1,5 +1,5 @@
 // expected: 3
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int f(int i) throws {
     if (i == 0) throw 0;

@@ -114,6 +114,7 @@ set(files
   xsaveoptintrin.h
   xsavesintrin.h
   xtestintrin.h
+  zcexception.hpp
   )
 
 set(cuda_wrapper_files

@@ -4978,8 +4978,6 @@ void CodeGenModule::EmitZCExceptionRTTIBasesDefinition(const char* DeclName, con
 
   for (size_t i = 0; i < BaseCount; i++)
   {
-    printf("GOT BASE NAME %s\n", BaseDeclNames[i]);
-
     IdentifierInfo* TIDII = &this->getContext().Idents.get(BaseDeclNames[i]);
     VarDecl *Decl = VarDecl::Create(this->getContext(), ExternCCtx, SL, SL, TIDII, CT, nullptr, SC_Extern);
 

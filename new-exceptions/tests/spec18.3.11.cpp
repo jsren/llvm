@@ -3,7 +3,7 @@
 The scope and lifetime of the parameters of a function or constructor extend into the handlers of a function-
 try-block.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 struct Test {
     Test(DtorTestObj o, int& out) throws try {

@@ -3,7 +3,7 @@
 If no match is found among the handlers for a try block, the search for a matching handler continues in a
 dynamically surrounding try block of the same thread.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int foo() throws
 {

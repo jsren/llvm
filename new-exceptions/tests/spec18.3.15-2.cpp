@@ -4,7 +4,7 @@ The variable declared by the exception-declaration, of type cv T or cv T&, is in
 object, of type E, as follows:
 otherwise, the variable is copy-initialized (11.6) from the exception object.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

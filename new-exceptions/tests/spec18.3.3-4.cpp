@@ -3,7 +3,7 @@
 A handler is a match for an exception object of type E if
 the handler is of type cv T or cv T& and T is an unambiguous public base class of E
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

@@ -1679,6 +1679,31 @@ VarDecl *CodeGenFunction::VarDeclForTypeID(QualType T) {
   return Decl;
 }
 
+static void GetBaseTypeNames(CodeGenFunction& CGF, const CXXRecordDecl& RD, std::vector<std::string>& Names)
+{
+    for (const CXXBaseSpecifier& Base : RD.bases()) {
+      // Ensure that the typeID is emitted
+      CGF.VarDeclForTypeID(Base.getType());
+
+      // Get the name of the typeID to reference
+      std::string BName = QualType::getAsString(Base.getType().split(),
+        CGF.getContext().getPrintingPolicy());
+
+      BName = std::regex_replace(BName, std::regex("[\\s\\*]"), "");
+      BName = std::regex_replace(BName, std::regex(":"), "__1");
+      BName = "__typeid_for_" + BName;
+
+      // If we haven't already seen this type, emit its bases and add
+      if (std::find(std::begin(Names), std::end(Names), BName) == Names.end()) {
+        const CXXRecordDecl *RD = Base.getType().getTypePtr()->getAsCXXRecordDecl();
+        if (RD) {
+          GetBaseTypeNames(CGF, *RD, Names);
+        }
+        Names.push_back(BName);
+      }
+    }
+}
+
 VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
   Qualifiers _;
   T = getContext().getUnqualifiedArrayType(T, _);
@@ -1729,22 +1754,12 @@ VarDecl *CodeGenFunction::VarDeclForBaseTypes(QualType T) {
     // Get the names of the typeID identifiers for the bases of this type
     // We cannot assume an order here
     std::vector<std::string> baseDeclStrings{};
+    GetBaseTypeNames(*this, *RD, baseDeclStrings);
+
     std::vector<const char*> baseDeclNames{};
-    for (const CXXBaseSpecifier& base : RD->bases()) {
-      // Ensure that the typeID is emitted
-      VarDeclForTypeID(base.getType());
-
-      // Get the name of the typeID to reference
-      std::string BName = QualType::getAsString(base.getType().split(),
-        getContext().getPrintingPolicy());
-
-      BName = std::regex_replace(BName, std::regex("[\\s\\*]"), "");
-      BName = std::regex_replace(BName, std::regex(":"), "__1");
-      BName = "__typeid_for_" + BName;
-      baseDeclStrings.emplace_back(std::move(BName));
-      baseDeclNames.push_back(baseDeclStrings.back().c_str());
+    for (const std::string& str : baseDeclStrings) {
+      baseDeclNames.push_back(str.c_str());
     }
-
     // Emit global definition
     CGM.EmitZCExceptionRTTIBasesDefinition(CName, baseDeclNames.data(), baseDeclNames.size(),
       TUnitDC, CurGD.getDecl()->getLocation());

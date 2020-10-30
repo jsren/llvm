@@ -4702,23 +4702,35 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     }
   }
 
-  // Add the implicit exception state object (ESO) parameter to the list
-  // of args if enabled
-  const ValueDecl* VDecl = dyn_cast_or_null<ValueDecl>(TargetDecl);
-  if (VDecl == nullptr) {
-    TargetDecl->dump();
-    assert(false && "Call expr function decl is not a value decl.");
+  const FunctionProtoType* FPT = dyn_cast<FunctionProtoType>(FnType);
+  // Get function prototype from declaration if possible
+  if (TargetDecl) {
+    // Add the implicit exception state object (ESO) parameter to the list
+    // of args if enabled
+    const ValueDecl* VDecl = dyn_cast_or_null<ValueDecl>(TargetDecl);
+    if (VDecl == nullptr) {
+      TargetDecl->dump();
+      assert(false && "Call expr function decl is not a value decl.");
+    }
+    CanQual<FunctionProtoType> FuncType = GetFormalFuncType(VDecl);
+    if (!FuncType.isNull()) {
+      FPT = FuncType.getTypePtr();
+    }
+  }
+  
+  if (FPT == nullptr) {
+    E->dump();
+    assert(false && "Call expr cannot get function prototype.");
   }
 
-  CanQual<FunctionProtoType> FTP = GetFormalFuncType(VDecl);
   if (getLangOpts().ZCExceptions &&
-    !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
+    FPT->getExceptionSpecType()
     == ExceptionSpecificationType::EST_Throws) {
     // Push exception object pointer.
     LoadExceptParam(Args);
     Callee.hasExceptParam = true;
   }
-  EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), E->arguments(),
+  EmitCallArgs(Args, FPT, E->arguments(),
                E->getDirectCallee(), /*ParamsToSkip*/ 0, Order);
 
   const CGFunctionInfo &FnInfo = CGM.getTypes().arrangeFreeFunctionCall(

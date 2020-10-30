@@ -2,7 +2,7 @@
 /*
 A handler of type “array of T” or function type T is adjusted to be of type “pointer to T”
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

@@ -869,6 +869,7 @@ llvm::Value *CodeGenFunction::GetExceptionDtor(CXXRecordDecl *R, bool &IsNull_ou
     else {
       IsNull_out = false;
       CXXDestructorDecl *D = R->getDestructor();
+      D->markUsed(this->getContext());
       llvm::Constant *FPtr = CGM.getAddrOfCXXStructor(D, StructorType::Complete);
       llvm::Type *T = ConvertType(getContext().ExceptMbrDtor->getType());
       return Builder.CreateBitCast(FPtr, T);
@@ -883,6 +884,7 @@ CXXConstructorDecl *CodeGenFunction::GetTypeCopyCtor(CXXRecordDecl *R, bool& Thr
 
     if (CD->isCopyConstructor()) {
       Target = CD;
+      Target->markUsed(this->getContext());
       Throws_Out = FPT && FPT->getExceptionSpecType()
         == ExceptionSpecificationType::EST_Throws;
       break;
@@ -919,6 +921,10 @@ CXXConstructorDecl *CodeGenFunction::GetTypeMoveCtor(CXXRecordDecl *R, bool& Thr
   // TODO: check visibility
   assert((Target != nullptr || hasTrivialMove || hasTrivialCopy) &&
     "Caught type must be trivial or have a non-deleted move or copy constructor.");
+
+  if (Target) {
+    Target->markUsed(this->getContext());
+  }
   return Target;
 }
 

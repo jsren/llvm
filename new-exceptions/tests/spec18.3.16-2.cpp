@@ -4,7 +4,7 @@ When the handler declares an object, any changes to that object will not affect 
 the handler declares a reference to an object, any changes to the referenced object are changes to the exception
 object and will have effect should that object be rethrown.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 int main()
 {

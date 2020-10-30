@@ -459,7 +459,7 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
 
       EH = true;
     }
-    if (Args.hasArg(options::OPT_fzcexceptions, true)) {
+    if (Args.hasArg(options::OPT_fzcexceptions)) {
       CmdArgs.push_back("-fzcexceptions");
     }
   }

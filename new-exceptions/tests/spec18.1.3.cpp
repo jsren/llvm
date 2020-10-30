@@ -8,7 +8,7 @@ the program is ill-formed.
 NB There are three copies here: once into the buffer, once out of the buffer into hidden-variable
 (for original rethrowing) and once more into the catch variable.
 */
-#include "stdexcept.hpp"
+#include "common.hpp"
 
 [[gnu::weak]] alignas(1)
     char __typeid_for_Test = 0;
