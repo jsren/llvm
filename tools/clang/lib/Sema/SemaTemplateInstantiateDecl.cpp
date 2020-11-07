@@ -3600,6 +3600,8 @@ void Sema::InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
   FunctionDecl *Template = Proto->getExceptionSpecTemplate();
   if (addInstantiatedParametersToScope(*this, Decl, Template, Scope,
                                        TemplateArgs)) {
+    // JSR TODO: No longer needed
+    //UpdateExceptionSpec(Decl, LangOpts.DefaultThrows ? EST_Throws : EST_None);
     UpdateExceptionSpec(Decl, EST_None);
     return;
   }

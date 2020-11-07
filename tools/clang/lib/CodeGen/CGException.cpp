@@ -684,10 +684,7 @@ bool CodeGenFunction::WithinThrows()
       const_cast<Decl*>(CurCodeDecl));
     if (codeDecl != nullptr)
       curDecl = codeDecl;
-    const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
-
-    return FPT && FPT->getExceptionSpecType()
-        == ExceptionSpecificationType::EST_Throws;
+    return CGM.IsZCThrowsFunction(nullptr, curDecl);
 }
 
 bool CodeGenFunction::WithinThrowingDtor()
@@ -697,10 +694,8 @@ bool CodeGenFunction::WithinThrowingDtor()
       const_cast<Decl*>(CurCodeDecl));
     if (codeDecl != nullptr)
       curDecl = codeDecl;
-    const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
 
-    bool throws = FPT && FPT->getExceptionSpecType()
-        == ExceptionSpecificationType::EST_Throws;
+    bool throws = CGM.IsZCThrowsFunction(nullptr, curDecl);;
     bool dtor = dyn_cast<CXXDestructorDecl>(curDecl) != nullptr;
     return dtor && throws;
 }
@@ -880,13 +875,11 @@ CXXConstructorDecl *CodeGenFunction::GetTypeCopyCtor(CXXRecordDecl *R, bool& Thr
   CXXConstructorDecl *Target{};
   for (NamedDecl *ND : LookUpConstructors(getContext(), R)) {
     CXXConstructorDecl *CD = cast<CXXConstructorDecl>(ND);
-    const FunctionProtoType *FPT = CD->getType()->castAs<FunctionProtoType>();
 
     if (CD->isCopyConstructor()) {
       Target = CD;
       Target->markUsed(this->getContext());
-      Throws_Out = FPT && FPT->getExceptionSpecType()
-        == ExceptionSpecificationType::EST_Throws;
+      Throws_Out = CGM.IsZCThrowsFunction(nullptr, CD);
       break;
     }
   }
@@ -901,18 +894,15 @@ CXXConstructorDecl *CodeGenFunction::GetTypeMoveCtor(CXXRecordDecl *R, bool& Thr
   CXXConstructorDecl *Target{};
   for (NamedDecl *ND : LookUpConstructors(getContext(), R)) {
     CXXConstructorDecl *CD = cast<CXXConstructorDecl>(ND);
-    const FunctionProtoType *FPT = CD->getType()->castAs<FunctionProtoType>();
 
     if (CD->isMoveConstructor()) {
       Target = CD;
-      Throws_Out = FPT && FPT->getExceptionSpecType()
-        == ExceptionSpecificationType::EST_Throws;
+      Throws_Out = CGM.IsZCThrowsFunction(nullptr, CD);
       break;
     }
     else if (CD->isCopyConstructor()) {
       Target = CD;
-      Throws_Out = FPT && FPT->getExceptionSpecType()
-        == ExceptionSpecificationType::EST_Throws;
+      Throws_Out = CGM.IsZCThrowsFunction(nullptr, CD);
     }
   }
   bool hasTrivialMove = !R || (R->hasMoveConstructor() && !R->hasNonTrivialMoveConstructor());
@@ -964,13 +954,11 @@ void CodeGenFunction::EmitZCThrow(const CXXThrowExpr *E) {
     const_cast<Decl*>(CurCodeDecl));
   if (codeDecl != nullptr)
     curDecl = codeDecl;
-  const FunctionProtoType *FPT = curDecl->getType()->castAs<FunctionProtoType>();
 
   EmitBlock(createBasicBlock("Throw"));
 
   // First check if within noexcept context. If so, just emit call to terminate.
-  if (catchHandlerBlockStack.size() == 0 && (!FPT || FPT->getExceptionSpecType()
-      != ExceptionSpecificationType::EST_Throws)) {
+  if (catchHandlerBlockStack.size() == 0 && CGM.IsZCThrowsFunction(nullptr, curDecl)) {
     Builder.CreateCall(CGM.getTerminateFn());
     Builder.CreateUnreachable();
     Builder.ClearInsertionPoint();

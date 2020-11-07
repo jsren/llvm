@@ -2330,10 +2330,18 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     Opts.LaxVectorConversions = 0;
   if (Args.hasArg(OPT_fno_threadsafe_statics))
     Opts.ThreadsafeStatics = 0;
+
+  Opts.DefaultThrows = Args.hasArg(OPT_fdefaultthrows);
   Opts.Exceptions = Args.hasArg(OPT_fexceptions);
   Opts.ZCExceptions = Args.hasArg(OPT_fzcexceptions);
   Opts.ObjCExceptions = Args.hasArg(OPT_fobjc_exceptions);
   Opts.CXXExceptions = Args.hasArg(OPT_fcxx_exceptions);
+
+  // Manual overrides
+  Opts.Exceptions = false;
+  Opts.CXXExceptions = false;
+  Opts.ZCExceptions = true;
+  Opts.DefaultThrows = Opts.CPlusPlus;
 
   // -ffixed-point
   Opts.FixedPoint =

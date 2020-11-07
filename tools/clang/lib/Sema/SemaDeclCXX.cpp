@@ -6416,6 +6416,32 @@ static FunctionProtoType::ExtProtoInfo getImplicitMethodEPI(Sema &S,
   return EPI;
 }
 
+
+static void printExceptionInfo(const char* Name, ExceptionSpecificationType ET, bool Override) noexcept
+{
+  const char* ETStr = "UNKNOWN";
+  switch (ET)
+  {
+  case EST_None: { ETStr = "EST_None"; break; }
+  case EST_DynamicNone: { ETStr = "EST_DynamicNone"; break; }
+  case EST_Dynamic: { ETStr = "EST_Dynamic"; break; }
+  case EST_MSAny: { ETStr = "EST_MSAny"; break; }
+  case EST_BasicNoexcept: { ETStr = "EST_BasicNoexcept"; break; }
+  case EST_DependentNoexcept: { ETStr = "EST_DependentNoexcept"; break; }
+  case EST_NoexceptFalse: { ETStr = "EST_NoexceptFalse"; break; }
+  case EST_NoexceptTrue: { ETStr = "EST_NoexceptTrue"; break; }
+  case EST_Unevaluated: { ETStr = "EST_Unevaluated"; break; }
+  case EST_Uninstantiated: { ETStr = "EST_Uninstantiated"; break; }
+  case EST_Unparsed: { ETStr = "EST_Unparsed"; break; }
+  case EST_Throws: { ETStr = "EST_Throws"; break; }
+  }
+
+  if (Name) {
+    printf("Fn %s: %s%s\n", Name, ETStr, Override ? " -> THROWS" : "");
+  }
+}
+
+
 void Sema::EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD) {
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
   if (FPT->getExceptionSpecType() != EST_Unevaluated)
@@ -6424,6 +6450,15 @@ void Sema::EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD) 
   // Evaluate the exception specification.
   auto IES = computeImplicitExceptionSpec(*this, Loc, MD);
   auto ESI = IES.getExceptionSpec();
+
+  // JSR TODO: Overriding at this level is hopefully unncessary
+  // // If default-throws and we've evaulated to noexcept(false), set type to 'throws'
+  // if (LangOpts.DefaultThrows && !isNoexceptExceptionSpec(ESI.Type)) {
+  //   printExceptionInfo(MD->getNameAsString().c_str(), ESI.Type, true);
+  //   ESI.Type = EST_Throws;
+  // } else {
+  //   printExceptionInfo(MD->getNameAsString().c_str(), ESI.Type, false);
+  // }
 
   // Update the type of the special member to use it.
   UpdateExceptionSpec(MD, ESI);

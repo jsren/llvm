@@ -5191,6 +5191,37 @@ static bool RebuildDeclaratorInCurrentInstantiation(Sema &S, Declarator &D,
   return false;
 }
 
+
+static void printExceptionInfo(const clang::UnqualifiedId& ID, ExceptionSpecificationType ET, bool Override) noexcept
+{
+  const char* ETStr = "UNKNOWN";
+  switch (ET)
+  {
+  case EST_None: { ETStr = "EST_None"; break; }
+  case EST_DynamicNone: { ETStr = "EST_DynamicNone"; break; }
+  case EST_Dynamic: { ETStr = "EST_Dynamic"; break; }
+  case EST_MSAny: { ETStr = "EST_MSAny"; break; }
+  case EST_BasicNoexcept: { ETStr = "EST_BasicNoexcept"; break; }
+  case EST_DependentNoexcept: { ETStr = "EST_DependentNoexcept"; break; }
+  case EST_NoexceptFalse: { ETStr = "EST_NoexceptFalse"; break; }
+  case EST_NoexceptTrue: { ETStr = "EST_NoexceptTrue"; break; }
+  case EST_Unevaluated: { ETStr = "EST_Unevaluated"; break; }
+  case EST_Uninstantiated: { ETStr = "EST_Uninstantiated"; break; }
+  case EST_Unparsed: { ETStr = "EST_Unparsed"; break; }
+  case EST_Throws: { ETStr = "EST_Throws"; break; }
+  }
+
+  if (ID.getKind() == UnqualifiedIdKind::IK_Identifier && ID.Identifier) {
+    printf("Fn %s: %s%s\n", ID.Identifier->getName().str().c_str(), ETStr, Override ? " -> THROWS" : "");
+  }
+}
+
+static bool CanReplaceThrows(ExceptionSpecificationType ET) noexcept
+{
+  return ET == EST_None || ET == EST_Dynamic || ET == EST_MSAny ||
+         ET == EST_NoexceptFalse || ET == EST_Throws;
+}
+
 Decl *Sema::ActOnDeclarator(Scope *S, Declarator &D) {
   D.setFunctionDefinitionKind(FDK_Declaration);
   Decl *Dcl = HandleDeclarator(S, D, MultiTemplateParamsArg());
@@ -5201,6 +5232,18 @@ Decl *Sema::ActOnDeclarator(Scope *S, Declarator &D) {
 
   if (getLangOpts().OpenCL)
     setCurrentOpenCLExtensionForDecl(Dcl);
+
+  // JSR TODO: This is no longer needed
+  // // If default-throws is enabled, set all non-C decls which aren't explicitly 'noexcept'
+  // // to 'throws'
+  // if (getLangOpts().DefaultThrows && D.isFunctionDeclarator()) {
+  //   bool Override = !CurContext->isExternCContext() &&
+  //       CanReplaceThrows(D.getFunctionTypeInfo().getExceptionSpecType());
+  //   printExceptionInfo(D.getName(), D.getFunctionTypeInfo().getExceptionSpecType(), Override);
+  //   if (Override) {
+  //     D.getFunctionTypeInfo().ExceptionSpecType = EST_Throws;
+  //   }
+  // }
 
   if (D.getName().getKind() == UnqualifiedIdKind::IK_Identifier &&
       D.getName().Identifier &&
@@ -8259,6 +8302,18 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                               MultiTemplateParamsArg TemplateParamLists,
                               bool &AddToScope) {
   QualType R = TInfo->getType();
+
+  // JSR TODO: This is no longer needed
+  // // If default-throws is enabled, set all non-C decls which aren't explicitly 'noexcept'
+  // // to 'throws'
+  // if (getLangOpts().DefaultThrows) {
+  //   bool Override = !CurContext->isExternCContext() &&
+  //       CanReplaceThrows(D.getFunctionTypeInfo().getExceptionSpecType());
+  //   printExceptionInfo(D.getName(), D.getFunctionTypeInfo().getExceptionSpecType(), Override);
+  //   if (Override) {
+  //     D.getFunctionTypeInfo().ExceptionSpecType = EST_Throws;
+  //   }
+  // }
 
   assert(R.getTypePtr()->isFunctionType());
 
@@ -14812,6 +14867,40 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
       T = Context.IntTy;
       TInfo = Context.getTrivialTypeSourceInfo(T, Loc);
     }
+
+    // JSR TODO: This is no longer needed
+    // // If default-throws is enabled, set all non-C fnptrs which aren't explicitly 'noexcept'
+    // // to 'throws'
+    // if (getLangOpts().DefaultThrows && T->isPointerType()) {
+    //   const PointerType* PT = T->castAs<PointerType>();
+    //   while (PT->getPointeeType()->isPointerType()) {
+    //     PT = PT->getPointeeType()->castAs<PointerType>();
+    //   }
+    //   const FunctionProtoType* FPT = PT->getPointeeType()->getAs<FunctionProtoType>();
+    //   if (FPT && PT->getPointeeType().isCanonical()) {
+    //     bool Override = !CurContext->isExternCContext() &&
+    //         FPT->getExceptionSpecType() == EST_None;
+    //     printExceptionInfo(D.getName(), FPT->getExceptionSpecType(), Override);
+    //     if (Override) {
+    //       // Create a new function type with 'throws' as the exception specification
+    //       FunctionProtoType::ExceptionSpecInfo ESI{EST_Throws};
+    //       QualType NewT = getASTContext().getFunctionTypeWithExceptionSpec(PT->getPointeeType(), ESI);
+    //       // 
+    //       NewT.setLocalFastQualifiers();
+    //       SmallVector<unsigned, 2> qualifiers{};
+    //       qualifiers.push_back(T.getLocalFastQualifiers());
+    //       const PointerType* PT = T->castAs<PointerType>();
+    //       while (PT->getPointeeType()->isPointerType()) {
+    //         qualifiers.push_back(PT->getPointeeType().getLocalFastQualifiers());
+    //         PT = PT->getPointeeType()->castAs<PointerType>();
+    //       }
+    //       for (size_t i = qualifiers.size(); i > 0; i--)
+    //       {
+    //         NewT = getASTContext().getPointerType(NewT);
+    //       }
+    //     }
+    //   }
+    // }
   }
 
   // TR 18037 does not allow fields to be declared with address spaces.

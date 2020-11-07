@@ -57,8 +57,7 @@ commonEmitCXXMemberOrOperatorCall(CodeGenFunction &CGF, const CXXMethodDecl *MD,
 
   // Push the exception obj
   const FunctionProtoType *FPT = MD->getType()->castAs<FunctionProtoType>();
-  if (CGF.getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (CGF.getLangOpts().ZCExceptions && CGF.CGM.IsZCThrowsFunction(FPT, MD)) {
     CGF.LoadExceptParam(Args);
   }
 
@@ -496,8 +495,7 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
 
   // Add the implicit exception state object (ESO) parameter to the list
   // of args if enabled
-  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(FPT, nullptr)) {
     LoadExceptParam(Args);
   }
 

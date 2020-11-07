@@ -1273,6 +1273,10 @@ public:
   /// \param QT is the clang QualType of the null pointer.
   llvm::Constant *getNullPointer(llvm::PointerType *T, QualType QT);
 
+  /// Gets whether the given function is potentially-throwing in the context
+  /// of deterministic exceptions
+  bool IsZCThrowsFunction(const FunctionProtoType *FPT, const ValueDecl *D) const;
+
 private:
   llvm::Constant *GetOrCreateLLVMFunction(
       StringRef MangledName, llvm::Type *Ty, GlobalDecl D, bool ForVTable,

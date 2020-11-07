@@ -31,12 +31,6 @@
 using namespace clang;
 using namespace CodeGen;
 
-/// Returns the canonical formal type of the given function
-static CanQual<FunctionProtoType> GetFormalType(const FunctionDecl *FD) {
-  return FD->getType()->getCanonicalTypeUnqualified()
-           .getAs<FunctionProtoType>();
-}
-
 /// Return the best known alignment for an unknown pointer to a
 /// particular class.
 CharUnits CodeGenModule::getClassPointerAlignment(const CXXRecordDecl *RD) {
@@ -2033,8 +2027,7 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
 
   // Add the implicit exception state object (ESO) parameter to the list
   // of args if enabled
-  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(FPT, D)) {
     LoadExceptParam(Args);
   }
 
@@ -2133,11 +2126,8 @@ void CodeGenFunction::EmitCXXConstructorCall(const CXXConstructorDecl *D,
       Args, D, Type, ExtraArgs.Prefix, ExtraArgs.Suffix, PassPrototypeArgs);
   CGCallee Callee = CGCallee::forDirect(CalleePtr, D);
 
-  CanQual<FunctionProtoType> FTP = GetFormalType(cast<FunctionDecl>(D));
-  if (getLangOpts().ZCExceptions && !FTP.isNull() &&
-    FTP.getTypePtr()->getExceptionSpecType() == ExceptionSpecificationType::EST_Throws) {
-    Callee.hasExceptParam = true;
-  }
+  Callee.hasExceptParam = getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(nullptr, D);
+
   EmitCall(Info, Callee, ReturnValueSlot(), Args);
 
   // Generate vtable assumptions if we're constructing a complete object
@@ -2289,8 +2279,7 @@ CodeGenFunction::EmitSynthesizedCXXCopyCtorCall(const CXXConstructorDecl *D,
 
   // Add the implicit exception state object (ESO) parameter to the list
   // of args if enabled
-  if (getLangOpts().ZCExceptions && FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(FPT, D)) {
     LoadExceptParam(Args);
   }
 

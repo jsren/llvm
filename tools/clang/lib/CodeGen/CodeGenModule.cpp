@@ -85,6 +85,23 @@ static CGCXXABI *createCXXABI(CodeGenModule &CGM) {
   llvm_unreachable("invalid C++ ABI kind");
 }
 
+/// Returns the canonical formal type of the given function
+static CanQual<FunctionProtoType> GetFormalFuncType(const ValueDecl *D) {
+  // Handle function pointers
+  auto Type = D->getType()->getCanonicalTypeUnqualified();
+
+  while (true) {
+    auto PtrTy = Type.getAs<PointerType>();
+    if (PtrTy) {
+      Type = PtrTy->getPointeeType();
+    }
+    else {
+      break;
+    }
+  }
+  return Type.getAs<FunctionProtoType>();
+}
+
 CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
                              const PreprocessorOptions &PPO,
                              const CodeGenOptions &CGO, llvm::Module &M,
@@ -2109,14 +2126,10 @@ llvm::Constant *CodeGenModule::EmitExceptionThunk(GlobalDecl GD, llvm::Constant 
 {
   // This thunk will simply take (and ignore) an additional __exception parameter
   // in order to provide a common call signature for throws and non-throws functions
-  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(
-    GD.getDecl())->getCanonicalDecl();
-
-  const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
+  const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl())->getCanonicalDecl();
   const CXXConstructorDecl *CD = dyn_cast_or_null<CXXConstructorDecl>(FD);
 
-  if (getLangOpts().ZCExceptions && (!FPT || FPT->getExceptionSpecType()
-      != ExceptionSpecificationType::EST_Throws))
+  if (getLangOpts().ZCExceptions && IsZCThrowsFunction(nullptr, FD))
   {
     std::string Name = getMangledName(GD).str() + ".throws";
 
@@ -5204,4 +5217,55 @@ CodeGenModule::createOpenCLIntToSamplerConversion(const Expr *E,
   return CGF.Builder.CreateCall(CreateRuntimeFunction(FTy,
                                 "__translate_sampler_initializer"),
                                 {C});
+}
+
+bool CodeGenModule::IsZCThrowsFunction(const FunctionProtoType *FPT, const ValueDecl *D) const
+{
+  bool isMain = false;
+  // Try to get function prototype from declaration if possible
+  if (D) {
+    const FunctionDecl* FD = dyn_cast_or_null<FunctionDecl>(D);
+    isMain = FD && FD->isMain();
+
+    // Add the implicit exception state object (ESO) parameter to the list
+    // of args if enabled
+    CanQual<FunctionProtoType> FuncType = GetFormalFuncType(D);
+    if (!FuncType.isNull()) {
+      FPT = FuncType.getTypePtr();
+    }
+  }
+
+  if (!FPT) {
+    if (D) {
+      D->dump();
+    }
+    assert(false && "Unable to get function prototype");
+  }
+
+  // JSR TODO: Right now with default-throws, we will NOT assume throws for
+  //           callees without a declaration - instead we will expect the
+  //           prototype to explicitly mark it as throwing.
+  //           We could change this behaviour based on wether we're currently
+  //           in an extern "C" context, however.
+  bool withinExternC = D && D->getDeclContext()->isExternCContext();
+
+  bool throwing = false;
+  switch (FPT->getExceptionSpecType()) {
+    case EST_Throws:
+    case EST_Dynamic:
+    case EST_MSAny:
+    case EST_NoexceptFalse:
+      throwing = true;
+      break;
+    default:
+      break;
+  }
+
+  // If default-throws is enabled and we have the declaration, treat EST_None
+  // functions as being throwing unless extern "C"
+  if (!throwing && getLangOpts().DefaultThrows && D) {
+    throwing = FPT->getExceptionSpecType() == EST_None &&
+               !D->getDeclContext()->isExternCContext();
+  }
+  return throwing && !isMain;
 }
