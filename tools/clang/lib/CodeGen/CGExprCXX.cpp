@@ -1368,6 +1368,15 @@ RValue CodeGenFunction::EmitBuiltinNewDeleteCall(const FunctionProtoType *Type,
                                                  bool IsDelete) {
   CallArgList Args;
   EmitCallArgs(Args, Type->getParamTypes(), TheCall->arguments());
+
+  if (getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(Type, nullptr)) {
+    // Add the '__exception' pointer.
+    auto T = getContext().getExceptionParamType().getCanonicalType();
+    Address ParamAddr = GetAddrOfLocalVar(curExceptDecl());
+    RValue ParamRV = RValue::get(ParamAddr.getPointer());
+    Args.add(ParamRV, CanQualType::CreateUnsafe(T));
+  }
+
   // Find the allocation or deallocation function that we're calling.
   ASTContext &Ctx = getContext();
   DeclarationName Name = Ctx.DeclarationNames
@@ -1615,6 +1624,18 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
   // operator, just "inline" it directly.
   Address allocation = Address::invalid();
   CallArgList allocatorArgs;
+
+  // If marked with 'throws' and deterministic exceptions are enabled,
+  // add the implicit exception state object parameter
+  if (CGM.getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(nullptr, allocator))
+  {
+    // Add the '__exception' pointer.
+    auto T = getContext().getExceptionParamType().getCanonicalType();
+    Address ParamAddr = GetAddrOfLocalVar(curExceptDecl());
+    RValue ParamRV = RValue::get(ParamAddr.getPointer());
+    allocatorArgs.add(ParamRV, CanQualType::CreateUnsafe(T));
+  }
+
   if (allocator->isReservedGlobalPlacementOperator()) {
     assert(E->getNumPlacementArgs() == 1);
     const Expr *arg = *E->placement_arguments().begin();
