@@ -3586,7 +3586,7 @@ QualType ASTContext::getFunctionTypeInternal(
         CanonicalEPI.ExceptionSpec.Type = EST_None;
         break;
 
-        // This should be unnecessary, but I'll add it just in case
+        // JSR TODO: This should be unnecessary, but I'll add it just in case
       case EST_Throws:
         CanonicalEPI.ExceptionSpec.Type = EST_Throws;
         break;

@@ -191,8 +191,7 @@ CodeGenTypes::arrangeFreeFunctionType(CanQual<FunctionProtoType> FTP,
   // If marked with 'throws' and deterministic exceptions are enabled,
   // add the implicit exception state object parameter
   if (CGM.getLangOpts().ZCExceptions &&
-    !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws && (!FD || !FD->isMain()))
+      !FTP.isNull() && CGM.IsZCThrowsFunction(FTP.getTypePtr(), FD))
   {
     // Add the '__exception' pointer.
     auto T = Context.getExceptionParamType().getCanonicalType();
@@ -263,9 +262,8 @@ CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
     argTypes.push_back(Context.VoidPtrTy);
 
   // Add the '__exception' pointer.
-  if (CGM.getLangOpts().ZCExceptions && (
-    (FTP && FTP->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) || forceThrows))
+  if (CGM.getLangOpts().ZCExceptions &&
+      (CGM.IsZCThrowsFunction(FTP, MD) || forceThrows))
   {
     auto T = Context.getExceptionParamType().getCanonicalType();
     argTypes.push_back(CanQualType::CreateUnsafe(T));
@@ -329,9 +327,8 @@ CodeGenTypes::arrangeCXXStructorDeclaration(const CXXMethodDecl *MD,
 
   CanQual<FunctionProtoType> FTP = GetFormalType(MD);
 
-  if (CGM.getLangOpts().ZCExceptions && (
-    (!FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) || forceThrows))
+  if (CGM.getLangOpts().ZCExceptions &&
+      ((!FTP.isNull() && CGM.IsZCThrowsFunction(FTP.getTypePtr(), MD)) || forceThrows))
   {
     // Add the '__exception' pointer.
     auto T = Context.getExceptionParamType().getCanonicalType();
@@ -4523,14 +4520,10 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
   // Emit check for exception failure
   bool throws = Callee.hasExceptParam;
-  if (!throws)
-  {
+  if (!throws) {
     auto *FD = dyn_cast_or_null<ValueDecl>(Callee.getAbstractInfo().getCalleeDecl());
     if (FD) {
-      auto *FPT = FD->getType()->getAs<FunctionProtoType>();
-      if (FPT) {
-        throws |= (FPT->getExceptionSpecType() == EST_Throws);
-      }
+      throws |= CGM.IsZCThrowsFunction(nullptr, FD);
     }
   }
   if (throws && getLangOpts().ZCExceptions)

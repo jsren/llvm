@@ -423,6 +423,7 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
     Args.ClaimAllArgs(options::OPT_fno_objc_exceptions);
     Args.ClaimAllArgs(options::OPT_fcxx_exceptions);
     Args.ClaimAllArgs(options::OPT_fzcexceptions);
+    Args.ClaimAllArgs(options::OPT_fdefaultthrows);
     Args.ClaimAllArgs(options::OPT_fno_cxx_exceptions);
     return;
   }
@@ -461,6 +462,9 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
     }
     if (Args.hasArg(options::OPT_fzcexceptions)) {
       CmdArgs.push_back("-fzcexceptions");
+    }
+    if (Args.hasArg(options::OPT_fdefaultthrows)) {
+      CmdArgs.push_back("-fdefaultthrows");
     }
   }
 

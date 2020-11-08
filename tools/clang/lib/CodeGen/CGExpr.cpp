@@ -47,23 +47,6 @@ using namespace CodeGen;
 //                        Miscellaneous Helper Methods
 //===--------------------------------------------------------------------===//
 
-/// Returns the canonical formal type of the given function
-static CanQual<FunctionProtoType> GetFormalFuncType(const ValueDecl *D) {
-  // Handle function pointers
-  auto Type = D->getType()->getCanonicalTypeUnqualified();
-
-  while (true) {
-    auto PtrTy = Type.getAs<PointerType>();
-    if (PtrTy) {
-      Type = PtrTy->getPointeeType();
-    }
-    else {
-      break;
-    }
-  }
-  return Type.getAs<FunctionProtoType>();
-}
-
 llvm::Value *CodeGenFunction::EmitCastToVoidPtr(llvm::Value *value) {
   unsigned addressSpace =
       cast<llvm::PointerType>(value->getType())->getAddressSpace();
@@ -4702,30 +4685,18 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     }
   }
 
-  const FunctionProtoType* FPT = dyn_cast<FunctionProtoType>(FnType);
-  // Get function prototype from declaration if possible
-  if (TargetDecl) {
-    // Add the implicit exception state object (ESO) parameter to the list
-    // of args if enabled
-    const ValueDecl* VDecl = dyn_cast_or_null<ValueDecl>(TargetDecl);
-    if (VDecl == nullptr) {
-      TargetDecl->dump();
-      assert(false && "Call expr function decl is not a value decl.");
-    }
-    CanQual<FunctionProtoType> FuncType = GetFormalFuncType(VDecl);
-    if (!FuncType.isNull()) {
-      FPT = FuncType.getTypePtr();
-    }
-  }
-  
+  const FunctionProtoType* FPT = dyn_cast_or_null<FunctionProtoType>(FnType);
   if (FPT == nullptr) {
     E->dump();
     assert(false && "Call expr cannot get function prototype.");
   }
+  const ValueDecl* ValDecl = dyn_cast_or_null<ValueDecl>(TargetDecl);
+  if (ValDecl == nullptr) {
+    E->dump();
+    assert(false && "Call expr is not a ValueDecl.");
+  }
 
-  if (getLangOpts().ZCExceptions &&
-    FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
+  if (getLangOpts().ZCExceptions && CGM.IsZCThrowsFunction(FPT, ValDecl)) {
     // Push exception object pointer.
     LoadExceptParam(Args);
     Callee.hasExceptParam = true;

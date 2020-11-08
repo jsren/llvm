@@ -1286,10 +1286,8 @@ QualType CodeGenFunction::BuildFunctionArgList(GlobalDecl GD,
     CGM.getCXXABI().buildThisParam(*this, Args);
   }
 
-  const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
   if (getLangOpts().ZCExceptions &&
-    ((FPT && FPT->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) || forceThrows)) {
+    (forceThrows || CGM.IsZCThrowsFunction(nullptr, FD))) {
     CGM.getCXXABI().buildExceptionParam(*this, Args);
   }
 
@@ -1472,16 +1470,11 @@ void CodeGenFunction::GenerateCode(GlobalDecl GD, llvm::Function *Fn,
   // Emit the standard function prologue.
   StartFunction(GD, ResTy, Fn, FnInfo, Args, Loc, BodyRange.getBegin());
 
-  bool isThrows = false;
   CanQual<FunctionProtoType> FTP = GetFormalType(FD);
-  if (getLangOpts().ZCExceptions &&
-    !FTP.isNull() && FTP.getTypePtr()->getExceptionSpecType()
-    == ExceptionSpecificationType::EST_Throws) {
-      isThrows = true;
-  }
+  bool Throwing = !FTP.isNull() && CGM.IsZCThrowsFunction(FTP.getTypePtr(), FD);
 
   // Emit implicit exception state if within a C function or main or throwing dtor
-  if (FD->isMain() || !isThrows || WithinThrowingDtor()) {
+  if (getLangOpts().ZCExceptions && (!Throwing || WithinThrowingDtor())) {
     ASTContext& C = getContext();
     IdentifierInfo* IIObj = &C.Idents.get(nextExceptionIdentifier("__exception_state"));
     IdentifierInfo* IIArg = &C.Idents.get(nextExceptionIdentifier("__exception"));
