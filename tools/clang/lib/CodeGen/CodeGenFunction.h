@@ -317,12 +317,9 @@ public:
     /// The base address of the captured record, passed in as the first
     /// argument of the parallel region function.
     llvm::Value *ThisValue;
-    llvm::Value *ExceptionValue{};
 
     /// Captured 'this' type.
     FieldDecl *CXXThisFieldDecl;
-    /// Captured '__exception' type
-    FieldDecl *CXXExceptObjDecl{};
   };
   CGCapturedStmtInfo *CapturedStmtInfo;
 

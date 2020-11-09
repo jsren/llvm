@@ -91,5 +91,5 @@ struct DtorTestObj {
 #include <cstdlib>
 
 inline void test_setup() {
-    std::set_terminate([]() { std::quick_exit(254); });
+    std::set_terminate([]() noexcept { std::quick_exit(254); });
 }

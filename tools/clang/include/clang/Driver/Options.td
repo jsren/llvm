@@ -855,6 +855,8 @@ def fexceptions : Flag<["-"], "fexceptions">, Group<f_Group>, Flags<[CC1Option]>
   HelpText<"Enable support for exception handling">;
 def fzcexceptions : Flag<["-"], "fzcexceptions">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Enable support for zero-cost exception handling">;
+def fdefaultthrows : Flag<["-"], "fdefaultthrows">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Default exception specification to 'throws'">;
 def fdwarf_exceptions : Flag<["-"], "fdwarf-exceptions">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Use DWARF style exceptions">;
 def fsjlj_exceptions : Flag<["-"], "fsjlj-exceptions">, Group<f_Group>,

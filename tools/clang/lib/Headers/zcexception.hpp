@@ -1,5 +1,8 @@
-/* stdexcept.hpp - (c) 2018 James Renwick */
+/* stdexcept.hpp - (c) 2018-2020 James Renwick */
 #pragma once
+
+#ifdef __cplusplus
+#pragma clang system_header
 
 extern "C" {
     void *aligned_alloc(decltype(sizeof(int)) alignment, decltype(sizeof(int)) size) throw ();
@@ -86,3 +89,5 @@ extern "C" {
         return true;
     }
 }
+
+#endif
