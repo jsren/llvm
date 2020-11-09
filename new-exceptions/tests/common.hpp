@@ -79,12 +79,6 @@ struct SuperObj : BaseObj {
     SuperObj(const SuperObj&) = default;
 };
 
-inline void shit()
-{
-    SuperObj o;
-    SuperObj o2{reinterpret_cast<SuperObj&&>(o)};
-}
-
 struct DtorTestObj {
     int& i;
     DtorTestObj(int& i) : i(i) { }
